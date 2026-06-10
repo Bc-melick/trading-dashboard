@@ -478,22 +478,9 @@ for year, grp in bt_results.groupby('Year'):
 annual_df = pd.DataFrame(annual_rows)
  
 # =============================================================================
-# MARKET DATA  — sectors & top movers
+# MARKET DATA  — sectors & top movers (1M, 6M, 1Y)
 # =============================================================================
  
-one_month_ago = datetime.now() - timedelta(days=31)
- 
-# Sector performance
-sector_data = fetch_closes(list(SECTOR_ETFS.values()), one_month_ago, datetime.now())
-sector_returns = {}
-for name, ticker in SECTOR_ETFS.items():
-    if ticker in sector_data.columns and len(sector_data[ticker]) >= 2:
-        r = (sector_data[ticker].iloc[-1] / sector_data[ticker].iloc[0] - 1) * 100
-        sector_returns[name] = round(r, 2)
- 
-top3_sectors = sorted(sector_returns.items(), key=lambda x: x[1], reverse=True)[:3]
- 
-# Top 20 stock performers (S&P 500 large caps proxy — use a curated list)
 LARGE_CAPS = [
     'AAPL','MSFT','NVDA','AMZN','GOOGL','META','TSLA','AVGO','JPM','LLY',
     'V','UNH','XOM','MA','JNJ','PG','HD','MRK','ORCL','ABBV',
@@ -501,14 +488,39 @@ LARGE_CAPS = [
     'NFLX','TMO','ACN','LIN','DHR','CSCO','ABT','TXN','PM','NEE',
     'NKE','QCOM','UPS','RTX','HON','LOW','AMGN','SBUX','INTU','GS'
 ]
-stock_data = fetch_closes(LARGE_CAPS, one_month_ago, datetime.now())
-stock_returns = {}
-for t in LARGE_CAPS:
-    if t in stock_data.columns and len(stock_data[t]) >= 2:
-        r = (stock_data[t].iloc[-1] / stock_data[t].iloc[0] - 1) * 100
-        stock_returns[t] = round(r, 2)
  
-top20_stocks = sorted(stock_returns.items(), key=lambda x: x[1], reverse=True)[:20]
+# Fetch enough history to cover 1 year for all timeframes in one call
+market_start   = datetime.now() - timedelta(days=370)
+sector_tickers = list(SECTOR_ETFS.values())
+sector_data    = fetch_closes(sector_tickers, market_start, datetime.now())
+stock_data     = fetch_closes(LARGE_CAPS,     market_start, datetime.now())
+ 
+TIMEFRAME_DAYS = {'1 Month': 31, '6 Months': 182, '1 Year': 365}
+ 
+def compute_returns(data, columns, days):
+    """Return sorted list of (name, pct_return) for the given lookback."""
+    cutoff = datetime.now() - timedelta(days=days)
+    results = {}
+    for col in columns:
+        if col not in data.columns: continue
+        sub = data[col][data.index >= pd.Timestamp(cutoff)]
+        if len(sub) >= 2:
+            results[col] = round((sub.iloc[-1] / sub.iloc[0] - 1) * 100, 2)
+    return results
+ 
+# Pre-compute all timeframes
+sector_returns_all = {}
+stock_returns_all  = {}
+ticker_to_name     = {v: k for k, v in SECTOR_ETFS.items()}
+ 
+for label, days in TIMEFRAME_DAYS.items():
+    raw_sec  = compute_returns(sector_data, sector_tickers, days)
+    # Map ticker -> sector name and get top 3
+    named    = {ticker_to_name.get(t, t): v for t, v in raw_sec.items()}
+    sector_returns_all[label] = sorted(named.items(), key=lambda x: x[1], reverse=True)[:3]
+ 
+    raw_stk  = compute_returns(stock_data, LARGE_CAPS, days)
+    stock_returns_all[label]  = sorted(raw_stk.items(), key=lambda x: x[1], reverse=True)[:20]
  
 # =============================================================================
 # MACRO DATA via FRED
@@ -668,7 +680,7 @@ buttons1 = [dict(label=lbl, method='relayout',
     for lbl, ts, te in timeframes]
 fig1.update_layout(
     paper_bgcolor='#0f172a', plot_bgcolor='#1e293b', font=dict(color='#e2e8f0'),
-    margin=dict(l=40, r=20, t=40, b=60), height=420,
+    margin=dict(l=50, r=10, t=40, b=60), height=440, autosize=True,
     xaxis=dict(title='Date', gridcolor='#334155', type='date',
                range=[bp_dates[0], bp_dates[-1]]),
     yaxis=dict(title='Blended Price', gridcolor='#334155', range=bp_yrange),
@@ -707,7 +719,7 @@ buttons2 = [dict(label=lbl, method='relayout',
     for lbl, ts, te in timeframes]
 fig2.update_layout(
     paper_bgcolor='#0f172a', plot_bgcolor='#1e293b', font=dict(color='#e2e8f0'),
-    margin=dict(l=40, r=20, t=20, b=60), height=420,
+    margin=dict(l=50, r=10, t=20, b=60), height=460, autosize=True,
     legend=dict(orientation='h', y=1.06, x=0, font=dict(size=11)),
     hovermode='x unified',
     updatemenus=[dict(type='buttons', direction='left', x=0.0, y=-0.12,
@@ -810,15 +822,18 @@ ann_rows = [[int(r['Year']), fmt_pct(r['Strategy']), fmt_pct(r['SPY']), fmt_pct(
             for _, r in annual_df.iterrows()]
 annual_table = html_table(ann_headers, ann_rows)
  
-# Sectors table
-sec_headers = ['Rank', 'Sector', '1-Month Return']
-sec_rows = [[i+1, s[0], fmt_pct(s[1])] for i, s in enumerate(top3_sectors)]
-sectors_table = html_table(sec_headers, sec_rows)
+# Build sector & stock tables for each timeframe — embedded as JSON for JS dropdown
+import json as _json
  
-# Top 20 stocks table
-stk_headers = ['Rank', 'Ticker', '1-Month Return']
-stk_rows = [[i+1, s[0], fmt_pct(s[1])] for i, s in enumerate(top20_stocks)]
-stocks_table = html_table(stk_headers, stk_rows)
+def build_table_data(returns_dict):
+    """Convert {label: [(name,pct)]} into JSON-safe dict for JS."""
+    out = {}
+    for label, rows in returns_dict.items():
+        out[label] = [{'rank': i+1, 'name': r[0], 'pct': r[1]} for i, r in enumerate(rows)]
+    return _json.dumps(out)
+ 
+sector_json = build_table_data(sector_returns_all)
+stock_json  = build_table_data(stock_returns_all)
  
 # Macro table
 mac_headers = ['Indicator', 'Latest Value', 'Trend']
@@ -909,7 +924,8 @@ html = f"""<!DOCTYPE html>
   .muted {{ color: #64748b; font-size: 0.85rem; padding: 12px 0; }}
  
   /* Chart container */
-  .chart-wrap {{ overflow-x: auto; }}
+  .chart-wrap {{ overflow-x: auto; width: 100%; }}
+  .chart-wrap > div {{ width: 100% !important; }}
 </style>
 </head>
 <body>
@@ -1011,8 +1027,16 @@ html = f"""<!DOCTYPE html>
   <!-- MARKET DATA -->
   <div class="two-col">
     <div class="section">
-      <h2>Top 3 Sector Performance (1 Month)</h2>
-      {sectors_table}
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;padding-bottom:10px;border-bottom:1px solid #334155">
+        <h2 style="margin:0;border:none;padding:0">Top 3 Sector Performance</h2>
+        <select id="sector-tf" onchange="updateSectorTable()" style="background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:4px 10px;font-size:0.85rem;cursor:pointer">
+          <option>1 Month</option><option>6 Months</option><option>1 Year</option>
+        </select>
+      </div>
+      <table id="sector-table">
+        <thead><tr><th>Rank</th><th>Sector</th><th>Return</th></tr></thead>
+        <tbody id="sector-tbody"></tbody>
+      </table>
     </div>
     <div class="section">
       <h2>Macro Indicators</h2>
@@ -1023,8 +1047,16 @@ html = f"""<!DOCTYPE html>
  
   <!-- TOP 20 STOCKS -->
   <div class="section">
-    <h2>Top 20 Stock Performers (1 Month)</h2>
-    {stocks_table}
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;padding-bottom:10px;border-bottom:1px solid #334155">
+      <h2 style="margin:0;border:none;padding:0">Top 20 Stock Performers</h2>
+      <select id="stock-tf" onchange="updateStockTable()" style="background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:4px 10px;font-size:0.85rem;cursor:pointer">
+        <option>1 Month</option><option>6 Months</option><option>1 Year</option>
+      </select>
+    </div>
+    <table id="stock-table">
+      <thead><tr><th>Rank</th><th>Ticker</th><th>Return</th></tr></thead>
+      <tbody id="stock-tbody"></tbody>
+    </table>
   </div>
  
   <!-- NEWS -->
@@ -1040,6 +1072,38 @@ html = f"""<!DOCTYPE html>
   </div>
  
 </div>
+ 
+<script>
+const SECTOR_DATA = {sector_json};
+const STOCK_DATA  = {stock_json};
+ 
+function colorPct(pct) {{
+  const sign  = pct >= 0 ? '+' : '';
+  const color = pct >= 0 ? '#4ade80' : '#f87171';
+  return `<span style="color:${{color}}">${{sign}}${{pct.toFixed(2)}}%</span>`;
+}}
+ 
+function updateSectorTable() {{
+  const tf   = document.getElementById('sector-tf').value;
+  const rows = SECTOR_DATA[tf] || [];
+  document.getElementById('sector-tbody').innerHTML = rows.map(r =>
+    `<tr><td>${{r.rank}}</td><td>${{r.name}}</td><td>${{colorPct(r.pct)}}</td></tr>`
+  ).join('');
+}}
+ 
+function updateStockTable() {{
+  const tf   = document.getElementById('stock-tf').value;
+  const rows = STOCK_DATA[tf] || [];
+  document.getElementById('stock-tbody').innerHTML = rows.map(r =>
+    `<tr><td>${{r.rank}}</td><td>${{r.name}}</td><td>${{colorPct(r.pct)}}</td></tr>`
+  ).join('');
+}}
+ 
+// Populate tables on page load
+updateSectorTable();
+updateStockTable();
+</script>
+ 
 </body>
 </html>"""
  
