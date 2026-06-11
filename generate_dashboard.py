@@ -39,7 +39,7 @@ weights           = {'SPY': 0.5, 'QQQ': 0.5}
 start_date        = datetime(2015, 1, 1)
 end_date          = datetime.now()
 BACKTEST_START    = datetime(2015, 2, 1)
-STARTING_CAPITAL  = 100_000.0
+STARTING_CAPITAL  = 1_000_000.0
  
 # Sector ETFs for top-3 sector performance (1 month)
 SECTOR_ETFS = {
@@ -102,6 +102,10 @@ blended_price = sum(price_data[t] * w for t, w in weights.items())
 blended_price.name = 'Blended_Price'
 qqq_price = price_data['QQQ']
 spy_price  = price_data['SPY']
+ 
+# Fetch S&P 500 index (^GSPC) for signal banner prices
+spx_data  = fetch_closes(['^GSPC'], start_date, end_date)
+spx_price = spx_data['^GSPC'] if '^GSPC' in spx_data.columns else spy_price * 10
  
 ema_20  = blended_price.ewm(span=20,  adjust=False).mean()
 ema_50  = blended_price.ewm(span=50,  adjust=False).mean()
@@ -469,11 +473,23 @@ metrics = {
 }
  
 # Annual performance table
+# For the current calendar year, use Jan 1 as the start so it matches
+# the YTD figure shown in the trailing returns and performance cards.
 annual_rows = []
+current_year = datetime.now().year
 bt_results['Year'] = bt_results.index.year
 for year, grp in bt_results.groupby('Year'):
-    sr = round((grp['Portfolio_Value'].iloc[-1] / grp['Portfolio_Value'].iloc[0] - 1) * 100, 2)
-    br = round((grp['Benchmark_Value'].iloc[-1]  / grp['Benchmark_Value'].iloc[0]  - 1) * 100, 2)
+    if year == current_year:
+        # YTD: use the last trading day on or before Jan 1 as base
+        ytd_start_ts = pd.Timestamp(datetime(current_year, 1, 1))
+        grp_ytd = bt_results[bt_results.index >= ytd_start_ts]
+        if grp_ytd.empty:
+            grp_ytd = grp
+        sr = round((grp_ytd['Portfolio_Value'].iloc[-1] / grp_ytd['Portfolio_Value'].iloc[0] - 1) * 100, 2)
+        br = round((grp_ytd['Benchmark_Value'].iloc[-1]  / grp_ytd['Benchmark_Value'].iloc[0]  - 1) * 100, 2)
+    else:
+        sr = round((grp['Portfolio_Value'].iloc[-1] / grp['Portfolio_Value'].iloc[0] - 1) * 100, 2)
+        br = round((grp['Benchmark_Value'].iloc[-1]  / grp['Benchmark_Value'].iloc[0]  - 1) * 100, 2)
     annual_rows.append({'Year': year, 'Strategy': sr, 'SPY': br, 'Alpha': round(sr - br, 2)})
 annual_df = pd.DataFrame(annual_rows)
  
@@ -802,15 +818,12 @@ else:
     else:
         banner_state = 'Risk-On' if last_buy_idx > last_reduce_idx else 'Defensive'
  
-# Fetch SPY closing prices to show S&P 500 level at each signal date
-spy_full = spy_price  # already fetched earlier
- 
+# Use S&P 500 index (^GSPC) to show actual SPX level at each signal date
 if not buy_rows.empty:
     last_buy_date     = buy_rows.index[-1].strftime('%B %d, %Y')
     last_buy_sig_date = buy_rows.index[-1]
-    # Get SPY price on or nearest to the buy signal date
-    spy_on_buy = spy_full.asof(last_buy_sig_date) if last_buy_sig_date in spy_full.index or True else None
-    last_buy_spy = f'S&P 500: ${spy_on_buy:,.2f}' if spy_on_buy and not pd.isna(spy_on_buy) else ''
+    spx_on_buy = spx_price.asof(last_buy_sig_date)
+    last_buy_spy = f'S&P 500: {spx_on_buy:,.2f}' if spx_on_buy and not pd.isna(spx_on_buy) else ''
     last_buy_cond = buy_rows['Condition'].iloc[-1] or ''
 else:
     last_buy_date = last_buy_spy = last_buy_cond = 'N/A'
@@ -818,8 +831,8 @@ else:
 if not reduce_rows.empty:
     last_reduce_date     = reduce_rows.index[-1].strftime('%B %d, %Y')
     last_reduce_sig_date = reduce_rows.index[-1]
-    spy_on_reduce = spy_full.asof(last_reduce_sig_date) if last_reduce_sig_date in spy_full.index or True else None
-    last_reduce_spy = f'S&P 500: ${spy_on_reduce:,.2f}' if spy_on_reduce and not pd.isna(spy_on_reduce) else ''
+    spx_on_reduce = spx_price.asof(last_reduce_sig_date)
+    last_reduce_spy = f'S&P 500: {spx_on_reduce:,.2f}' if spx_on_reduce and not pd.isna(spx_on_reduce) else ''
     last_reduce_cond = reduce_rows['Condition'].iloc[-1] or ''
 else:
     last_reduce_date = last_reduce_spy = last_reduce_cond = 'N/A'
@@ -1006,7 +1019,7 @@ html = f"""<!DOCTYPE html>
   <!-- Starting investment -->
   <div style="border-right:1px solid #334155;padding-right:28px;margin-right:4px">
     <div class="label">Starting Investment</div>
-    <div class="exposure" style="font-size:1.4rem;font-weight:700;margin-top:4px">$100,000</div>
+    <div class="exposure" style="font-size:1.4rem;font-weight:700;margin-top:4px">$1,000,000</div>
     <div style="font-size:0.78rem;color:#64748b;margin-top:2px">February 1, 2015</div>
   </div>
  
