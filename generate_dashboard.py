@@ -680,13 +680,15 @@ buttons1 = [dict(label=lbl, method='relayout',
     for lbl, ts, te in timeframes]
 fig1.update_layout(
     paper_bgcolor='#0f172a', plot_bgcolor='#1e293b', font=dict(color='#e2e8f0'),
-    margin=dict(l=50, r=10, t=40, b=60), height=440, autosize=True,
+    margin=dict(l=55, r=10, t=80, b=20), height=460, autosize=True,
     xaxis=dict(title='Date', gridcolor='#334155', type='date',
                range=[bp_dates[0], bp_dates[-1]]),
     yaxis=dict(title='Blended Price', gridcolor='#334155', range=bp_yrange),
-    legend=dict(orientation='h', y=1.08, x=0, font=dict(size=11)),
+    legend=dict(orientation='h', y=1.0, x=0.0, xanchor='left',
+                yanchor='bottom', font=dict(size=11), bgcolor='rgba(0,0,0,0)'),
     hovermode='x unified',
-    updatemenus=[dict(type='buttons', direction='left', x=0.0, y=-0.18,
+    updatemenus=[dict(type='dropdown', direction='down',
+        x=1.0, y=1.12, xanchor='right', yanchor='top',
         buttons=buttons1, bgcolor='#334155', bordercolor='#64748b',
         font=dict(color='white'), showactive=True)]
 )
@@ -719,10 +721,12 @@ buttons2 = [dict(label=lbl, method='relayout',
     for lbl, ts, te in timeframes]
 fig2.update_layout(
     paper_bgcolor='#0f172a', plot_bgcolor='#1e293b', font=dict(color='#e2e8f0'),
-    margin=dict(l=50, r=10, t=20, b=60), height=460, autosize=True,
-    legend=dict(orientation='h', y=1.06, x=0, font=dict(size=11)),
+    margin=dict(l=55, r=10, t=80, b=20), height=480, autosize=True,
+    legend=dict(orientation='h', y=1.0, x=0.0, xanchor='left',
+                yanchor='bottom', font=dict(size=11), bgcolor='rgba(0,0,0,0)'),
     hovermode='x unified',
-    updatemenus=[dict(type='buttons', direction='left', x=0.0, y=-0.12,
+    updatemenus=[dict(type='dropdown', direction='down',
+        x=1.0, y=1.08, xanchor='right', yanchor='top',
         buttons=buttons2, bgcolor='#334155', bordercolor='#64748b',
         font=dict(color='white'), showactive=True)]
 )
@@ -758,33 +762,67 @@ def pct_color(val):
     except:
         return '#e2e8f0'
  
-def signal_badge(sig):
-    colors = {'Buy': '#4ade80', 'Reduce': '#f87171', 'None': '#94a3b8'}
-    labels = {'Buy': 'BUY', 'Reduce': 'SELL / REDUCE', 'None': 'HOLD'}
-    c = colors.get(sig, '#94a3b8')
-    l = labels.get(sig, sig)
-    return f'<span style="background:{c};color:#0f172a;padding:6px 18px;border-radius:20px;font-weight:700;font-size:1.1rem">{l}</span>'
+def signal_badge(state):
+    # state: 'Buy', 'Reduce', 'Defensive', 'Risk-On'
+    configs = {
+        'Buy':       ('#4ade80', '#0f172a', 'BUY'),
+        'Reduce':    ('#f87171', '#0f172a', 'REDUCE'),
+        'Defensive': ('#fbbf24', '#0f172a', 'DEFENSIVE'),
+        'Risk-On':   ('#60a5fa', '#0f172a', 'RISK-ON'),
+    }
+    bg, fg, label = configs.get(state, ('#94a3b8', '#0f172a', state.upper()))
+    return f'<span style="background:{bg};color:{fg};padding:6px 18px;border-radius:20px;font-weight:700;font-size:1.1rem">{label}</span>'
  
 today_sig  = metrics['today_signal']
 today_date = signals_df.index[-1].strftime('%B %d, %Y')
  
-# Find the last Buy signal and last Reduce signal dates/prices
+# Find the last Buy and last Reduce signal rows
 buy_rows    = signals_df[signals_df['Signal'] == 'Buy']
 reduce_rows = signals_df[signals_df['Signal'] == 'Reduce']
  
-if not buy_rows.empty:
-    last_buy_date  = buy_rows.index[-1].strftime('%B %d, %Y')
-    last_buy_price = f"${buy_rows['Blended_Price'].iloc[-1]:,.2f}"
-    last_buy_cond  = buy_rows['Condition'].iloc[-1] or ''
+# Determine current state for the banner badge:
+#   Buy     = today's signal is Buy
+#   Reduce  = today's signal is Reduce
+#   Defensive = last signal was Reduce (and no Buy since)
+#   Risk-On   = last signal was Buy (and no Reduce since)
+if today_sig == 'Buy':
+    banner_state = 'Buy'
+elif today_sig == 'Reduce':
+    banner_state = 'Reduce'
 else:
-    last_buy_date = last_buy_price = last_buy_cond = 'N/A'
+    # Determine which signal came most recently
+    last_buy_idx    = buy_rows.index[-1]    if not buy_rows.empty    else None
+    last_reduce_idx = reduce_rows.index[-1] if not reduce_rows.empty else None
+    if last_buy_idx is None and last_reduce_idx is None:
+        banner_state = 'Risk-On'
+    elif last_reduce_idx is None:
+        banner_state = 'Risk-On'
+    elif last_buy_idx is None:
+        banner_state = 'Defensive'
+    else:
+        banner_state = 'Risk-On' if last_buy_idx > last_reduce_idx else 'Defensive'
+ 
+# Fetch SPY closing prices to show S&P 500 level at each signal date
+spy_full = spy_price  # already fetched earlier
+ 
+if not buy_rows.empty:
+    last_buy_date     = buy_rows.index[-1].strftime('%B %d, %Y')
+    last_buy_sig_date = buy_rows.index[-1]
+    # Get SPY price on or nearest to the buy signal date
+    spy_on_buy = spy_full.asof(last_buy_sig_date) if last_buy_sig_date in spy_full.index or True else None
+    last_buy_spy = f'S&P 500: ${spy_on_buy:,.2f}' if spy_on_buy and not pd.isna(spy_on_buy) else ''
+    last_buy_cond = buy_rows['Condition'].iloc[-1] or ''
+else:
+    last_buy_date = last_buy_spy = last_buy_cond = 'N/A'
  
 if not reduce_rows.empty:
-    last_reduce_date  = reduce_rows.index[-1].strftime('%B %d, %Y')
-    last_reduce_price = f"${reduce_rows['Blended_Price'].iloc[-1]:,.2f}"
-    last_reduce_cond  = reduce_rows['Condition'].iloc[-1] or ''
+    last_reduce_date     = reduce_rows.index[-1].strftime('%B %d, %Y')
+    last_reduce_sig_date = reduce_rows.index[-1]
+    spy_on_reduce = spy_full.asof(last_reduce_sig_date) if last_reduce_sig_date in spy_full.index or True else None
+    last_reduce_spy = f'S&P 500: ${spy_on_reduce:,.2f}' if spy_on_reduce and not pd.isna(spy_on_reduce) else ''
+    last_reduce_cond = reduce_rows['Condition'].iloc[-1] or ''
 else:
-    last_reduce_date = last_reduce_price = last_reduce_cond = 'N/A'
+    last_reduce_date = last_reduce_spy = last_reduce_cond = 'N/A'
  
 # =============================================================================
 # ASSEMBLE HTML
@@ -939,27 +977,27 @@ html = f"""<!DOCTYPE html>
  
   <!-- Today's signal -->
   <div style="border-right:1px solid #334155;padding-right:28px;margin-right:4px">
-    <div class="label">Today's Signal &nbsp;·&nbsp; {today_date}</div>
-    <div style="margin-top:8px">{signal_badge(today_sig)}</div>
+    <div class="label">Current Signal &nbsp;·&nbsp; {today_date}</div>
+    <div style="margin-top:8px">{signal_badge(banner_state)}</div>
   </div>
  
   <!-- Last Buy signal -->
   <div style="border-right:1px solid #334155;padding-right:28px;margin-right:4px">
     <div class="label">Last Buy Signal</div>
     <div style="margin-top:6px;font-size:1rem;font-weight:700;color:#4ade80">{last_buy_date}</div>
-    <div style="font-size:0.78rem;color:#64748b;margin-top:2px">Blended Price: {last_buy_price}</div>
+    <div style="font-size:0.78rem;color:#64748b;margin-top:2px">{last_buy_spy}</div>
   </div>
  
   <!-- Last Reduce signal -->
   <div style="border-right:1px solid #334155;padding-right:28px;margin-right:4px">
     <div class="label">Last Reduce Signal</div>
     <div style="margin-top:6px;font-size:1rem;font-weight:700;color:#f87171">{last_reduce_date}</div>
-    <div style="font-size:0.78rem;color:#64748b;margin-top:2px">Blended Price: {last_reduce_price}</div>
+    <div style="font-size:0.78rem;color:#64748b;margin-top:2px">{last_reduce_spy}</div>
   </div>
  
   <!-- Exposure -->
   <div style="border-right:1px solid #334155;padding-right:28px;margin-right:4px">
-    <div class="label">Current QQQ Exposure</div>
+    <div class="label">Current Exposure</div>
     <div class="exposure" style="font-size:1.4rem;font-weight:700;margin-top:4px">
       {metrics['today_exposure']:.0f}%
     </div>
