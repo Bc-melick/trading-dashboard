@@ -536,63 +536,47 @@ annual_df = pd.DataFrame(annual_rows)
 # MARKET DATA  — sectors & top movers (1M, 6M, 1Y)
 # =============================================================================
 
-LARGE_CAPS = list(dict.fromkeys([
-    # Mega cap / Semis / Tech
-    'AAPL','MSFT','NVDA','AMZN','GOOGL','GOOG','META','TSLA','AVGO','ORCL',
-    'AMD','INTC','QCOM','TXN','MU','AMAT','LRCX','KLAC','MRVL','MCHP','ON','SWKS',
-    'SMCI','PLTR','ARM','DELL','HPQ','HPE','PSTG','NTAP','WDC','STX',
-    'SNOW','CRWD','ZS','PANW','FTNT','NET','DDOG','S','OKTA','ZTEC',
-    'ADBE','CRM','NOW','INTU','TEAM','WDAY','HUBS','VEEV','SMAR','COUP',
-    'TTD','MGNI','PUBM','ROKU','NFLX','SPOT','RBLX','EA','TTWO','ZNGA',
-    'UBER','LYFT','ABNB','DASH','GRAB','CART',
-    'COIN','HOOD','SQ','PYPL','V','MA','FIS','FISV','GPN','WEX',
+# ~150 liquid tickers: S&P 100 core + key high-momentum names across all sectors
+# Sized to fetch reliably in a single yfinance call within GitHub Actions limits
+LARGE_CAPS = [
+    # Mega cap tech & software
+    'AAPL','MSFT','NVDA','AMZN','GOOGL','META','TSLA','AVGO','ORCL','ADBE',
+    'CRM','NOW','INTU','CSCO','IBM','QCOM','TXN','AMD','INTC','ACN',
+    # Semis & hardware (key momentum names)
+    'MU','AMAT','LRCX','KLAC','MRVL','SMCI','PLTR','ARM','DELL','HPQ',
+    # Cybersecurity & cloud
+    'CRWD','PANW','FTNT','NET','ZS','DDOG','SNOW','COIN',
+    # Internet & media
+    'NFLX','UBER','ABNB','BKNG','TTD','ROKU','SPOT','RBLX',
+    # Payments & fintech
+    'V','MA','PYPL','SQ','AXP','COF','HOOD',
     # Financials
-    'JPM','BAC','WFC','GS','MS','C','BLK','SCHW','AXP','COF',
-    'USB','PNC','TFC','FITB','RF','CFG','HBAN','KEY','MTB','BK','STT',
-    'ICE','CME','CBOE','NDAQ','SPGI','MCO','FDS','MSCI','WTW','AON',
-    'MMC','TRV','PGR','ALL','CB','MET','PRU','AFL','GL','LNC',
-    # Healthcare / Biotech
+    'JPM','BAC','WFC','GS','MS','BLK','SCHW','C',
+    'SPGI','MCO','ICE','CME','PGR','CB','MMC',
+    # Healthcare & biotech
     'LLY','UNH','JNJ','ABBV','MRK','PFE','TMO','ABT','DHR','SYK',
-    'BMY','AMGN','GILD','REGN','VRTX','BIIB','MRNA','BNTX','ARWR','ALNY',
-    'ISRG','BSX','EW','ZBH','BAX','BDX','VAR','HOLX','IDXX','MTD',
-    'IQV','CRL','MEDP','ICLR','PRA','CNC','HUM','CI','ELV','MOH','CVS',
-    # Consumer Discretionary
-    'WMT','COST','HD','LOW','TGT','DG','DLTR','KR','AZO','ORLY',
-    'MCD','SBUX','CMG','YUM','QSR','DPZ','DKNG','BKNG','EXPE','ABNB',
-    'MAR','HLT','H','IHG','RCL','CCL','NCLH','LVS','WYNN','MGM','CZR',
-    'NKE','LULU','PVH','RL','TPR','TJX','ROST','BURL','M','KSS','GPS',
-    'AMZN','ETSY','W','CHWY','CVNA','KMX','AN','LAD',
-    # Consumer Staples
-    'PG','KO','PEP','PM','MO','MDLZ','KHC','GIS','CPB','CAG',
-    'CL','CHD','EL','COTY','REV','ENR','SPB',
+    'AMGN','GILD','REGN','VRTX','MRNA','ISRG','BSX','ELV','CVS','CI',
+    # Consumer discretionary
+    'AMZN','WMT','COST','HD','MCD','SBUX','CMG','NKE','LULU','BKNG',
+    'TGT','LOW','TJX','ROST','DKNG','RCL','MAR','HLT','LVS','WYNN',
+    # Consumer staples
+    'PG','KO','PEP','PM','MO','MDLZ','CL','GIS',
     # Industrials
-    'HON','RTX','LMT','NOC','GD','BA','CAT','DE','EMR','ETN',
-    'GE','GEHC','GEV','MMM','ITW','PH','ROK','IR','XYL','GNRC','ROP','AME',
-    'UPS','FDX','DAL','UAL','AAL','LUV','JBLU','ALK','HA',
-    'WERN','CHRW','EXPD','XPO','SAIA','ODFL','JBHT','KNX',
-    'CSX','NSC','UNP','CP','CNI','WAB','TRN',
+    'HON','RTX','LMT','BA','CAT','DE','GE','ETN','UPS','FDX',
+    'NOC','GD','MMM','EMR','ITW','CSX','UNP','DAL','UAL',
     # Energy
-    'XOM','CVX','COP','OXY','SLB','HAL','MPC','PSX','VLO','HES',
-    'EOG','DVN','FANG','APA','BKR','NOV','FTI','CHK','RRC','EQT',
-    'KMI','WMB','OKE','ET','EPD','MMP','PAA',
+    'XOM','CVX','COP','OXY','SLB','MPC','PSX','VLO','EOG','DVN',
     # Communication
-    'GOOGL','META','DIS','CMCSA','T','VZ','TMUS','CHTR','PARA','WBD',
-    'FOX','FOXA','NYT','IAC','MTCH','ZM','WEBX','YELP',
-    # Real Estate
-    'AMT','PLD','CCI','EQIX','PSA','DLR','O','VICI','WPC','AVB',
-    'EQR','SPG','VTR','WELL','ARE','BXP','KIM','REG','FRT','UDR',
-    'CBRE','JLL','CWK','Z','RDFN','OPEN',
+    'DIS','CMCSA','T','VZ','TMUS','CHTR','PARA',
+    # Real estate
+    'AMT','PLD','EQIX','CCI','PSA','DLR','O','SPG','VICI',
     # Utilities
-    'NEE','DUK','SO','D','EXC','AEP','SRE','PCG','ED','XEL',
-    'ES','AWK','WEC','DTE','CMS','ATO','NI','OGE','PNW',
+    'NEE','DUK','SO','D','AEP','SRE','EXC',
     # Materials
-    'LIN','APD','SHW','ECL','NEM','FCX','NUE','STLD','RS','ATI',
-    'AA','CENX','MP','LTHM','ALB','SQM','VALE','RIO','BHP',
-    # High-momentum / EV / International ADRs
-    'RIVN','LCID','F','GM','STLA','TM','HMC',
-    'SHOP','MELI','SE','PDD','BABA','JD','BIDU','NIO','XPEV','LI',
-    'SQ','AFRM','SOFI','UPST','LC','ALLY','NU','ARES','KKR','APO','CG',
-]))
+    'LIN','APD','SHW','ECL','NEM','FCX','ALB',
+    # High-momentum & growth
+    'SHOP','MELI','NU','KKR','APO','ARES','F','GM',
+]
 
 # Fetch enough history to cover 1 year for all timeframes in one call
 market_start   = datetime.now() - timedelta(days=370)
@@ -1138,6 +1122,46 @@ def news_list(articles, fallback):
 geo_html   = news_list(geo_news,   'Add NEWS_API_KEY as a GitHub Actions secret to enable live news headlines. Sign up free at newsapi.org/register')
 macro_html = news_list(macro_news, 'Add NEWS_API_KEY as a GitHub Actions secret to enable live news headlines. Sign up free at newsapi.org/register')
 
+# Background animation script stored as plain string (outside f-string to avoid
+# escaping conflicts between Python's {{ }} and JavaScript's { })
+bg_script = '''<canvas id="bg-canvas"></canvas>
+<script>
+(function() {
+  const c=document.getElementById('bg-canvas'),ctx=c.getContext('2d');
+  let W,H,stars=[];
+  function resize(){W=c.width=window.innerWidth;H=c.height=window.innerHeight;}
+  resize(); window.addEventListener('resize',resize);
+  for(let i=0;i<180;i++) stars.push({
+    x:Math.random()*2000,y:Math.random()*2000,
+    r:Math.random()*1.4+0.3,a:Math.random()*Math.PI*2,
+    s:Math.random()*0.004+0.001,op:Math.random()*0.6+0.2
+  });
+  let t=0;
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    const g=ctx.createLinearGradient(0,0,W,H);
+    g.addColorStop(0,'#060d1f');g.addColorStop(0.5,'#0a1628');g.addColorStop(1,'#060d1f');
+    ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+    ctx.strokeStyle='rgba(30,80,140,0.08)';ctx.lineWidth=1;
+    const grid=80,off=(t*8)%grid;
+    for(let x=-grid+off;x<W+grid;x+=grid){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+    for(let y=-grid+off;y<H+grid;y+=grid){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+    stars.forEach(s=>{s.a+=s.s;const px=s.x%W,py=s.y%H;
+      const op=s.op*(0.6+0.4*Math.sin(s.a));
+      ctx.beginPath();ctx.arc(px,py,s.r,0,Math.PI*2);
+      ctx.fillStyle='rgba(150,200,255,'+op+')';ctx.fill();
+    });
+    [[W*0.2,H*0.3,'rgba(30,100,200,0.04)'],[W*0.8,H*0.7,'rgba(60,30,180,0.04)']].forEach(function(o){
+      const rg=ctx.createRadialGradient(o[0],o[1],0,o[0],o[1],300);
+      rg.addColorStop(0,o[2]);rg.addColorStop(1,'transparent');
+      ctx.fillStyle=rg;ctx.fillRect(0,0,W,H);
+    });
+    t+=0.003;requestAnimationFrame(draw);
+  }
+  draw();
+})();
+</script>'''
+
 html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1217,43 +1241,7 @@ html = f"""<!DOCTYPE html>
 </style>
 </head>
 <body>
-<canvas id="bg-canvas"></canvas>
-<script>
-(function(){{
-  const c=document.getElementById('bg-canvas'),ctx=c.getContext('2d');
-  let W,H,stars=[];
-  function resize(){{W=c.width=window.innerWidth;H=c.height=window.innerHeight;}}
-  resize(); window.addEventListener('resize',resize);
-  for(let i=0;i<180;i++) stars.push({{
-    x:Math.random()*2000,y:Math.random()*2000,
-    r:Math.random()*1.4+0.3,a:Math.random()*Math.PI*2,
-    s:Math.random()*0.004+0.001,op:Math.random()*0.6+0.2
-  }});
-  let t=0;
-  function draw(){{
-    ctx.clearRect(0,0,W,H);
-    const g=ctx.createLinearGradient(0,0,W,H);
-    g.addColorStop(0,'#060d1f');g.addColorStop(0.5,'#0a1628');g.addColorStop(1,'#060d1f');
-    ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
-    ctx.strokeStyle='rgba(30,80,140,0.08)';ctx.lineWidth=1;
-    const grid=80,off=(t*8)%grid;
-    for(let x=-grid+off;x<W+grid;x+=grid){{ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}}
-    for(let y=-grid+off;y<H+grid;y+=grid){{ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}}
-    stars.forEach(s=>{{s.a+=s.s;const px=s.x%W,py=s.y%H;
-      const op=s.op*(0.6+0.4*Math.sin(s.a));
-      ctx.beginPath();ctx.arc(px,py,s.r,0,Math.PI*2);
-      ctx.fillStyle=`rgba(150,200,255,${{op}})`;ctx.fill();
-    }});
-    [[W*0.2,H*0.3,'rgba(30,100,200,0.04)'],[W*0.8,H*0.7,'rgba(60,30,180,0.04)']].forEach(([ox,oy,col])=>{{
-      const rg=ctx.createRadialGradient(ox,oy,0,ox,oy,300);
-      rg.addColorStop(0,col);rg.addColorStop(1,'transparent');
-      ctx.fillStyle=rg;ctx.fillRect(0,0,W,H);
-    }});
-    t+=0.003;requestAnimationFrame(draw);
-  }}
-  draw();
-}})();
-</script>
+{bg_script}
 
 <div class="header">
   <h1>📈 Trading Strategy Dashboard</h1>
