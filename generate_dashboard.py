@@ -69,40 +69,39 @@ def fetch_closes(tickers, start, end, max_retries=5, delay=2):
             if raw.empty:
                 raise ValueError('No data returned.')
 
-            # Single ticker — raw has flat columns (Open, High, Low, Close…)
-            if len(tickers) == 1:
-                close = raw['Close'].squeeze()
-                result = pd.DataFrame({tickers[0]: close}).ffill().dropna()
-                result = result[~result.index.duplicated(keep='last')]
-                return result
-
-            # Multiple tickers — yfinance returns a MultiIndex (field, ticker)
-            # Handle both MultiIndex and cases where yfinance returns flat columns
+            # Extract Close prices depending on column structure
             if isinstance(raw.columns, pd.MultiIndex):
-                # Standard multi-ticker MultiIndex: ('Close', 'AAPL') etc.
-                if 'Close' in raw.columns.get_level_values(0):
-                    close_df = raw['Close']
+                lvl0 = raw.columns.get_level_values(0).unique().tolist()
+                if 'Close' in lvl0:
+                    close_df = raw['Close'].copy()
                 else:
-                    # Some yfinance versions use ('AAPL', 'Close') ordering
-                    close_df = raw.xs('Close', axis=1, level=1)
-                # Only keep tickers we asked for that are present
-                cols = [t for t in tickers if t in close_df.columns]
-                result = close_df[cols].ffill().dropna(how='all')
-                # Remove duplicate index entries (can occur with yfinance timezone handling)
-                result = result[~result.index.duplicated(keep='last')]
-                return result
+                    close_df = raw.xs('Close', axis=1, level=1).copy()
+                # If only one ticker came back as a Series, wrap it
+                if isinstance(close_df, pd.Series):
+                    close_df = close_df.to_frame(name=tickers[0])
             else:
-                # Flat columns — single ticker returned despite list input
-                close = raw['Close'].squeeze()
-                result = pd.DataFrame({tickers[0]: close}).ffill().dropna()
-                result = result[~result.index.duplicated(keep='last')]
-                return result
+                # Flat columns (single ticker or old yfinance)
+                close_df = raw[['Close']].copy()
+                close_df.columns = [tickers[0]]
+
+            # Normalize index: strip timezone, convert to date-only DatetimeIndex
+            close_df.index = pd.to_datetime(close_df.index).tz_localize(None)
+            close_df.index = close_df.index.normalize()  # strip time component
+
+            # Drop duplicate dates (keep last — most complete record)
+            close_df = close_df[~close_df.index.duplicated(keep='last')]
+            close_df = close_df.sort_index()
+
+            # Keep only requested tickers that are present
+            cols = [t for t in tickers if t in close_df.columns]
+            if not cols:
+                cols = list(close_df.columns)
+            close_df = close_df[cols].ffill().dropna(how='all')
+            return close_df
 
         except Exception as e:
             print(f'Attempt {attempt+1} failed: {e}')
             time.sleep(delay)
-    # All retries failed — return empty DataFrame so downstream code
-    # can handle it gracefully rather than crashing the whole script
     print(f'WARNING: fetch_closes failed for {tickers[:5]}… returning empty')
     return pd.DataFrame()
 
@@ -129,6 +128,8 @@ def calculate_macd(series, short=12, long=26, signal=9):
 all_tickers = list(weights.keys()) + ['QQQ']
 price_data  = fetch_closes(all_tickers, start_date, end_date)
 
+# Extra safety: ensure no duplicate dates survive into the blended price
+price_data = price_data[~price_data.index.duplicated(keep='last')].sort_index()
 blended_price = sum(price_data[t] * w for t, w in weights.items())
 blended_price.name = 'Blended_Price'
 qqq_price = price_data['QQQ']
