@@ -1,38 +1,38 @@
 name: Refresh Dashboard Daily
-
+ 
 on:
   schedule:
     # Runs at 9:00 PM UTC every weekday = ~5PM Eastern (after US market close)
     - cron: '0 21 * * 1-5'
   # Also lets you trigger it manually from the GitHub website with one click
   workflow_dispatch:
-
+ 
 permissions:
   contents: write
-
+ 
 jobs:
   build:
     runs-on: ubuntu-latest
-
+ 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-
+ 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
+ 
       - name: Install dependencies
         run: |
-          pip install pandas numpy yfinance plotly requests
-
+          pip install pandas==2.2.2 numpy==1.26.4 yfinance==0.2.51 plotly==5.22.0 requests==2.32.3 openpyxl==3.1.2
+ 
       - name: Generate dashboard
         env:
           NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
         run: python generate_dashboard.py
-
+ 
       - name: Commit and push updated index.html
         run: |
           git config user.name  "github-actions[bot]"
