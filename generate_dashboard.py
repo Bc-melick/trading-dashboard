@@ -65,46 +65,36 @@ def fetch_closes(tickers, start, end, max_retries=5, delay=2):
         try:
             raw = yf.download(tickers, start=start, end=end,
                               group_by='ticker', auto_adjust=True,
-                              progress=False, threads=False)
+                              progress=False)
             if raw.empty:
                 raise ValueError('No data returned.')
 
-            # Extract Close prices depending on column structure
-            if isinstance(raw.columns, pd.MultiIndex):
-                lvl0 = raw.columns.get_level_values(0).unique().tolist()
-                if 'Close' in lvl0:
-                    close_df = raw['Close'].copy()
-                else:
-                    close_df = raw.xs('Close', axis=1, level=1).copy()
-                if isinstance(close_df, pd.Series):
-                    close_df = close_df.to_frame(name=tickers[0])
+            # Build close price DataFrame — same approach as trading_strategy.py
+            if len(tickers) == 1:
+                df = pd.DataFrame({tickers[0]: raw['Close']})
             else:
-                close_df = raw[['Close']].copy()
-                close_df.columns = [tickers[0]]
+                df = pd.DataFrame({t: raw[t]['Close'] for t in tickers
+                                   if t in raw.columns.get_level_values(0)
+                                   or (isinstance(raw.columns, pd.MultiIndex)
+                                       and t in raw.columns.get_level_values(1))})
+                # Fallback: try the other MultiIndex level ordering
+                if df.empty:
+                    df = pd.DataFrame({t: raw[t]['Close'] for t in tickers
+                                       if t in raw})
 
-            # Strip timezone safely:
-            # tz_localize(None) crashes if index is already tz-aware;
-            # must use tz_convert(None) in that case.
-            idx = pd.to_datetime(close_df.index)
-            if idx.tz is not None:
-                idx = idx.tz_convert('UTC').tz_localize(None)
-            close_df.index = idx.normalize()  # strip time, keep date only
-
-            # Drop duplicate dates and sort
-            close_df = close_df[~close_df.index.duplicated(keep='last')]
-            close_df = close_df.sort_index()
-
-            # Keep only requested tickers present in result
-            cols = [t for t in tickers if t in close_df.columns]
-            if not cols:
-                cols = list(close_df.columns)
-            close_df = close_df[cols].ffill().dropna(how='all')
-            return close_df
+            # Flatten index to plain dates — handles both tz-aware and tz-naive
+            df.index = pd.to_datetime(
+                [str(d)[:10] for d in df.index]
+            )
+            # Deduplicate and sort
+            df = df[~df.index.duplicated(keep='last')].sort_index()
+            df = df.ffill().dropna(how='all')
+            return df
 
         except Exception as e:
             print(f'Attempt {attempt+1} failed: {e}')
             time.sleep(delay)
-    print(f'WARNING: fetch_closes failed for {tickers[:5]}... returning empty')
+    print(f'WARNING: fetch_closes failed for {tickers[:3]}... returning empty')
     return pd.DataFrame()
 
 
@@ -1463,3 +1453,4 @@ with open('index.html', 'w', encoding='utf-8') as f:
 
 print(f"Dashboard generated: index.html ({len(html):,} chars)")
 print(f"Today's signal: {today_sig} | Exposure: {metrics['today_exposure']}%")
+
