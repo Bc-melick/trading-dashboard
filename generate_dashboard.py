@@ -611,7 +611,8 @@ stock_data     = fetch_closes(LARGE_CAPS,     market_start, datetime.now())
 TIMEFRAME_DAYS = {'1 Month': 31, '6 Months': 182, '1 Year': 365}
 
 def compute_returns(data, columns, days):
-    """Return dict of {name: pct_return} for the given lookback period."""
+    """Return dict of {name: pct_return} for the given lookback period.
+    Any ticker with nan, missing, or bad data is silently skipped."""
     if data is None or data.empty:
         return {}
     cutoff = datetime.now() - timedelta(days=days)
@@ -623,8 +624,22 @@ def compute_returns(data, columns, days):
         try:
             idx = data.index.tz_localize(None) if data.index.tz is not None else data.index
             sub = data[col][idx >= cutoff_ts].dropna()
-            if len(sub) >= 2 and sub.iloc[0] != 0:
-                results[col] = round((sub.iloc[-1] / sub.iloc[0] - 1) * 100, 2)
+            # Skip if not enough data points
+            if len(sub) < 2:
+                continue
+            start_val = sub.iloc[0]
+            end_val   = sub.iloc[-1]
+            # Skip if either value is nan, zero, or infinite
+            if (pd.isna(start_val) or pd.isna(end_val) or
+                    start_val == 0 or
+                    not np.isfinite(start_val) or
+                    not np.isfinite(end_val)):
+                continue
+            pct = round((end_val / start_val - 1) * 100, 2)
+            # Skip if the result itself is nan or infinite (extra safety)
+            if pd.isna(pct) or not np.isfinite(pct):
+                continue
+            results[col] = pct
         except Exception:
             continue
     return results
