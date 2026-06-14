@@ -573,10 +573,10 @@ LARGE_CAPS = [
     # Internet & media
     'NFLX','UBER','ABNB','BKNG','TTD','ROKU','SPOT','RBLX',
     # Payments & fintech
-    'V','MA','PYPL','SQ','AXP','COF','HOOD',
+    'V','MA','PYPL','AXP','COF','HOOD',
     # Financials
     'JPM','BAC','WFC','GS','MS','BLK','SCHW','C',
-    'SPGI','MCO','ICE','CME','PGR','CB','MMC',
+    'SPGI','MCO','ICE','CME','PGR','CB',
     # Healthcare & biotech
     'LLY','UNH','JNJ','ABBV','MRK','PFE','TMO','ABT','DHR','SYK',
     'AMGN','GILD','REGN','VRTX','MRNA','ISRG','BSX','ELV','CVS','CI',
@@ -591,7 +591,7 @@ LARGE_CAPS = [
     # Energy
     'XOM','CVX','COP','OXY','SLB','MPC','PSX','VLO','EOG','DVN',
     # Communication
-    'DIS','CMCSA','T','VZ','TMUS','CHTR','PARA',
+    'DIS','CMCSA','T','VZ','TMUS','CHTR',
     # Real estate
     'AMT','PLD','EQIX','CCI','PSA','DLR','O','SPG','VICI',
     # Utilities
