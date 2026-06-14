@@ -760,7 +760,7 @@ def fred_yoy_series(series_id, api_key):
     if not api_key: return None
     url = (f'https://api.stlouisfed.org/fred/series/observations'
            f'?series_id={series_id}&api_key={api_key}&file_type=json'
-           f'&sort_order=desc&limit=20')
+           f'&sort_order=desc&limit=22')
     try:
         r   = requests.get(url, timeout=15)
         obs = r.json().get('observations', [])
@@ -768,14 +768,18 @@ def fred_yoy_series(series_id, api_key):
                 if o['value'] not in ('.', '', None)]
         if len(vals) < 14: return None
         # vals[0]=latest, vals[12]=12 months ago, vals[15]=15 months ago, vals[18]=18 months ago
+        # Build a list of 7 monthly YoY readings so macro_row can access
+        # obs[0]=latest, obs[3]=3 months ago, obs[6]=6 months ago
         yoy_rows = []
-        for idx, months_back_yoy in [(0,12),(3,12),(6,12)]:
-            if idx + months_back_yoy < len(vals):
+        for idx in range(7):
+            if idx + 12 < len(vals):
                 cur  = vals[idx][1]
-                base = vals[idx + months_back_yoy][1]
+                base = vals[idx + 12][1]
                 pct  = round((cur / base - 1) * 100, 2)
                 yoy_rows.append((vals[idx][0], pct))
-        return yoy_rows if yoy_rows else None
+            else:
+                break
+        return yoy_rows if len(yoy_rows) >= 1 else None
     except:
         return None
 
