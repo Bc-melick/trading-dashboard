@@ -1159,36 +1159,46 @@ macro_html = news_list(macro_news, 'Add NEWS_API_KEY as a GitHub Actions secret 
 bg_script = '''<canvas id="bg-canvas"></canvas>
 <script>
 (function() {
-  const c=document.getElementById('bg-canvas'),ctx=c.getContext('2d');
-  let W,H,stars=[];
-  function resize(){W=c.width=window.innerWidth;H=c.height=window.innerHeight;}
-  resize(); window.addEventListener('resize',resize);
-  for(let i=0;i<180;i++) stars.push({
-    x:Math.random()*2000,y:Math.random()*2000,
-    r:Math.random()*1.4+0.3,a:Math.random()*Math.PI*2,
-    s:Math.random()*0.004+0.001,op:Math.random()*0.6+0.2
-  });
-  let t=0;
-  function draw(){
-    ctx.clearRect(0,0,W,H);
-    const g=ctx.createLinearGradient(0,0,W,H);
-    g.addColorStop(0,'#060d1f');g.addColorStop(0.5,'#0a1628');g.addColorStop(1,'#060d1f');
-    ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
-    ctx.strokeStyle='rgba(30,80,140,0.08)';ctx.lineWidth=1;
-    const grid=80,off=(t*8)%grid;
-    for(let x=-grid+off;x<W+grid;x+=grid){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
-    for(let y=-grid+off;y<H+grid;y+=grid){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
-    stars.forEach(s=>{s.a+=s.s;const px=s.x%W,py=s.y%H;
-      const op=s.op*(0.6+0.4*Math.sin(s.a));
-      ctx.beginPath();ctx.arc(px,py,s.r,0,Math.PI*2);
-      ctx.fillStyle='rgba(150,200,255,'+op+')';ctx.fill();
+  const c = document.getElementById('bg-canvas');
+  const ctx = c.getContext('2d');
+  let W, H;
+  function resize() { W = c.width = window.innerWidth; H = c.height = window.innerHeight; }
+  resize(); window.addEventListener('resize', resize);
+  const CANDLES = [];
+  const COUNT = 38;
+  function randBetween(a, b) { return a + Math.random() * (b - a); }
+  function makeCandle() {
+    const bullish = Math.random() > 0.45;
+    const bodyH = randBetween(18, 60);
+    const wickTop = randBetween(4, 20);
+    const wickBot = randBetween(4, 20);
+    return { x: randBetween(0, 2000), y: randBetween(-H * 1.5, 0), speed: randBetween(0.4, 1.4),
+      width: randBetween(7, 18), bodyH, wickTop, wickBot, totalH: bodyH + wickTop + wickBot,
+      bullish, opacity: randBetween(0.12, 0.38) };
+  }
+  for (let i = 0; i < COUNT; i++) { const cnd = makeCandle(); cnd.y = randBetween(-H, H); CANDLES.push(cnd); }
+  function drawCandle(cnd) {
+    const { x, y, width, bodyH, wickTop, wickBot, bullish, opacity } = cnd;
+    const cx = x % W; const base = y + wickTop; const mid = cx;
+    const col = bullish ? 'rgba(74,222,128,' + opacity + ')' : 'rgba(248,113,113,' + opacity + ')';
+    ctx.strokeStyle = col; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(mid, y); ctx.lineTo(mid, base);
+    ctx.moveTo(mid, base + bodyH); ctx.lineTo(mid, base + bodyH + wickBot); ctx.stroke();
+    ctx.fillStyle = col; ctx.fillRect(cx - width / 2, base, width, bodyH);
+  }
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#020812'); g.addColorStop(0.5, '#060d1f'); g.addColorStop(1, '#020812');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    const glow = ctx.createLinearGradient(0, H * 0.25, 0, H * 0.45);
+    glow.addColorStop(0, 'rgba(30,80,200,0)'); glow.addColorStop(0.5, 'rgba(30,80,200,0.04)'); glow.addColorStop(1, 'rgba(30,80,200,0)');
+    ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H);
+    CANDLES.forEach(cnd => {
+      drawCandle(cnd); cnd.y += cnd.speed;
+      if (cnd.y > H + cnd.totalH + 20) { Object.assign(cnd, makeCandle()); cnd.y = -cnd.totalH - 10; cnd.x = randBetween(0, W); }
     });
-    [[W*0.2,H*0.3,'rgba(30,100,200,0.04)'],[W*0.8,H*0.7,'rgba(60,30,180,0.04)']].forEach(function(o){
-      const rg=ctx.createRadialGradient(o[0],o[1],0,o[0],o[1],300);
-      rg.addColorStop(0,o[2]);rg.addColorStop(1,'transparent');
-      ctx.fillStyle=rg;ctx.fillRect(0,0,W,H);
-    });
-    t+=0.003;requestAnimationFrame(draw);
+    requestAnimationFrame(draw);
   }
   draw();
 })();
@@ -1276,7 +1286,8 @@ html = f"""<!DOCTYPE html>
 {bg_script}
 
 <div class="header">
-  <h1>📈 Trading Strategy Dashboard</h1>
+  <h1 style="font-size:1.9rem;font-weight:800;letter-spacing:0.12em;background:linear-gradient(90deg,#60a5fa,#4ade80,#fbbf24);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">APEX</h1>
+  <span style="font-size:0.72rem;color:#475569;letter-spacing:0.18em;text-transform:uppercase;display:block;margin-top:2px">Algorithmic Portfolio Execution</span>
   <span class="updated">Last updated: {datetime.now().strftime('%B %d, %Y at %H:%M UTC')}</span>
 </div>
 
