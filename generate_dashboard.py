@@ -1393,7 +1393,6 @@ html = f"""<!DOCTYPE html>
     <div class="section">
       <h2>Macro Indicators</h2>
       {macro_table}
-      <p class="muted" style="margin-top:12px">Source: FRED (St. Louis Fed) &bull; 3M/6M trend shows change vs. that period. Add FRED_API_KEY secret to enable live data.</p>
     </div>
   </div>
 
