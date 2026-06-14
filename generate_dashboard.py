@@ -1212,7 +1212,7 @@ html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Trading Strategy Dashboard</title>
 <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 <style>
@@ -1272,6 +1272,48 @@ html = f"""<!DOCTYPE html>
   /* Two-column grid for news/market */
   .two-col {{ display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }}
   @media (max-width: 860px) {{ .two-col {{ grid-template-columns: 1fr; }} }}
+
+  /* ── Mobile styles ── */
+  @media (max-width: 600px) {{
+    /* Header */
+    .header {{ padding: 16px 16px; }}
+    .header h1 {{ font-size: 1.4rem; }}
+
+    /* Banner — stack vertically */
+    .signal-banner {{ padding: 16px; flex-direction: column; gap: 16px; }}
+    .banner-item {{ border-right: none !important; border-bottom: 1px solid #1e3a5f;
+      padding: 0 0 16px 0 !important; margin-right: 0 !important; }}
+    .banner-item:last-child {{ border-bottom: none; padding-bottom: 0; }}
+
+    /* Main content padding */
+    .main {{ padding: 16px 12px; gap: 16px; }}
+
+    /* Sections */
+    .section {{ padding: 16px; }}
+    .section h2 {{ font-size: 0.9rem; }}
+
+    /* Metric cards — 2 per row on mobile */
+    .cards {{ grid-template-columns: 1fr 1fr; gap: 10px; }}
+    .card {{ padding: 12px; }}
+    .card-value {{ font-size: 1rem; }}
+
+    /* Tables — allow horizontal scroll on small screens */
+    table {{ font-size: 0.78rem; display: block; overflow-x: auto; white-space: nowrap; }}
+    th, td {{ padding: 8px 10px; }}
+
+    /* Sector table */
+    #sector-table {{ font-size: 0.88rem; }}
+    #sector-table td, #sector-table th {{ padding: 10px 10px; }}
+
+    /* Charts — let them scroll horizontally if needed */
+    .chart-wrap {{ overflow-x: auto; -webkit-overflow-scrolling: touch; }}
+
+    /* News */
+    .news-item a {{ font-size: 0.82rem; }}
+
+    /* Dropdowns larger touch target */
+    select {{ padding: 8px 12px; font-size: 0.9rem; }}
+  }}
 
   /* News */
   .news-item {{ padding: 10px 0; border-bottom: 1px solid #334155; }}
