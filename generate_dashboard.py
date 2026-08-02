@@ -60,7 +60,11 @@ SECTOR_ETFS = {
 # HELPERS
 # =============================================================================
 
-def fetch_closes(tickers, start, end, max_retries=5, delay=2):
+def fetch_ohlc(tickers, start, end, max_retries=5, delay=2):
+    """
+    Fetch daily OHLC data and return a dict with
+    'Close', 'High', 'Low' DataFrames, all with plain date indexes.
+    """
     for attempt in range(max_retries):
         try:
             raw = yf.download(tickers, start=start, end=end,
@@ -69,34 +73,39 @@ def fetch_closes(tickers, start, end, max_retries=5, delay=2):
             if raw.empty:
                 raise ValueError('No data returned.')
 
+            result = {}
+            for field in ['Close', 'High', 'Low']:
+            
             # Build close price DataFrame — same approach as trading_strategy.py
-            if len(tickers) == 1:
-                df = pd.DataFrame({tickers[0]: raw['Close']})
-            else:
-                df = pd.DataFrame({t: raw[t]['Close'] for t in tickers
-                                   if t in raw.columns.get_level_values(0)
-                                   or (isinstance(raw.columns, pd.MultiIndex)
-                                       and t in raw.columns.get_level_values(1))})
-                # Fallback: try the other MultiIndex level ordering
-                if df.empty:
-                    df = pd.DataFrame({t: raw[t]['Close'] for t in tickers
-                                       if t in raw})
+                if len(tickers) == 1:
+                    df = pd.DataFrame({tickers[0]: raw[field]})
+                else:
+                    df = pd.DataFrame({t: raw[t][field] for t in tickers
+                                       if t in raw.columns.get_level_values(0)
+                                       or (isinstance(raw.columns, pd.MultiIndex)
+                                           and t in raw.columns.get_level_values(1))})
+                    # Fallback: try the other MultiIndex level ordering
+                    if df.empty:
+                        df = pd.DataFrame({t: raw[t][field] for t in tickers
+                                           if t in raw})
 
-            # Flatten index to plain dates — handles both tz-aware and tz-naive
-            df.index = pd.to_datetime(
-                [str(d)[:10] for d in df.index]
-            )
-            # Deduplicate and sort
-            df = df[~df.index.duplicated(keep='last')].sort_index()
-            df = df.ffill().dropna(how='all')
-            return df
+                # Flatten index to plain dates — handles both tz-aware and tz-naive
+                df.index = pd.to_datetime([str(d)[:10] for d in df.index])
+                df = df[~df.index.duplicated(keep='last')].sort_index()
+                df = df.ffill().dropna(how='all')
+                result[field] = df
+            
+            return result
 
         except Exception as e:
             print(f'Attempt {attempt+1} failed: {e}')
             time.sleep(delay)
-    print(f'WARNING: fetch_closes failed for {tickers[:3]}... returning empty')
-    return pd.DataFrame()
+    print(f'WARNING: fetch_ohlc failed for {tickers[:3]}... returning empty')
+    return {'Close': pd.DataFrame(), 'High': pd.DataFrame(), 'Low': pd.DataFrame()}
 
+def fetch_closes(tickers, start, end, max_retries=5, delay=2):
+    """Convenience wrapper that returns just the Close DataFrame."""
+    return fetch_ohlc(tickers, start, end, max_retries, delay)['Close']
 
 def calculate_rsi(series, window=14):
     delta = series.diff()
@@ -118,14 +127,27 @@ def calculate_macd(series, short=12, long=26, signal=9):
 # =============================================================================
 
 all_tickers = list(weights.keys()) + ['QQQ']
-price_data  = fetch_closes(all_tickers, start_date, end_date)
+ohlc_data   = fetch_ohlc(all_tickers, start_date, end_date)
 
-# Extra safety: ensure no duplicate dates survive into the blended price
-price_data = price_data[~price_data.index.duplicated(keep='last')].sort_index()
-blended_price = sum(price_data[t] * w for t, w in weights.items())
+close_data = ohlc_data['Close']
+high_data  = ohlc_data['High']
+low_data   = ohlc_data['Low']
+
+# Extra safety: ensure no duplicate dates
+for _df in [close_data, high_data, low_data]:
+    _df.drop_duplicates(inplace=True)
+
+blended_price = sum(close_data[t] * w for t, w in weights.items())
 blended_price.name = 'Blended_Price'
-qqq_price = price_data['QQQ']
-spy_price  = price_data['SPY']
+
+qqq_close = close_data['QQQ']
+qqq_high  = high_data['QQQ']
+qqq_low   = low_data['QQQ']
+spy_price  = close_data['SPY']
+
+# Next-day midpoint for trade execution: (next day High + next day Low) / 2
+qqq_midpoint = ((qqq_high + qqq_low) / 2).shift(-1)
+qqq_midpoint.iloc[-1] = qqq_close.iloc[-1]  # fallback for last day
 
 # Fetch S&P 500 index (^GSPC) for signal banner prices
 # Use yf.download directly with a try/except since ^GSPC can behave
@@ -391,23 +413,28 @@ signals_df['Signal'] = signals_df['Signal'].fillna('None')
 # BACKTEST ENGINE
 # =============================================================================
 
-bt_mask  = signals_df.index >= pd.Timestamp(BACKTEST_START)
-bt_df    = signals_df[bt_mask].copy()
-bt_qqq   = qqq_price[bt_mask].copy()
-bt_spy   = spy_price[bt_mask].copy()
-bt_blend = blended_price[bt_mask].copy()
+bt_mask     = signals_df.index >= pd.Timestamp(BACKTEST_START)
+bt_df       = signals_df[bt_mask].copy()
+bt_qqq      = qqq_close[bt_mask].copy()
+bt_qqq_mid  = qqq_midpoint[bt_mask].copy()
+bt_spy      = spy_price[bt_mask].copy()
+bt_blend    = blended_price[bt_mask].copy()
 
 portfolio_value       = STARTING_CAPITAL
 exposure              = 1.0
-qqq_shares            = (portfolio_value * exposure) / bt_qqq.iloc[0]
+# Initial purchase uses next-day midpoint
+qqq_shares            = (portfolio_value * exposure) / bt_qqq_mid.iloc[0]
 cash                  = 0.0
 incrementing_active   = False
 last_blend_ref        = None
 bt_records            = []
 
 for date, row in bt_df.iterrows():
-    qqq_px   = bt_qqq.loc[date]
-    blend_px = bt_blend.loc[date]
+    # Mark-to-market at today's close
+    qqq_px      = bt_qqq.loc[date]
+    # Trade execution at next day's midpoint
+    qqq_exec_px = bt_qqq_mid.loc[date]
+    blend_px    = bt_blend.loc[date]
     signal   = row['Signal']
     buy_cond = row['Condition']
 
@@ -415,12 +442,14 @@ for date, row in bt_df.iterrows():
 
     if signal == 'Buy':
         if buy_cond in ('cross_200', 'cross_100', 'cross_20_inverse', 'macd'):
-            qqq_shares = portfolio_value / qqq_px
+            # Execute at next day's midpoint
+            qqq_shares = portfolio_value / qqq_exec_px
             cash = 0.0; exposure = 1.0
             incrementing_active = False; last_blend_ref = None
         elif buy_cond == 'cross_50':
             target = min(exposure + 0.10, 1.0)
-            qqq_shares = portfolio_value * target / qqq_px
+            # Execute at next day's midpoint
+            qqq_shares = portfolio_value * target / qqq_exec_px
             cash = portfolio_value * (1 - target)
             exposure = target
             incrementing_active = True; last_blend_ref = blend_px
@@ -431,7 +460,8 @@ for date, row in bt_df.iterrows():
         ema200_val = bt_df.loc[date, 'EMA_200']
         full_exit  = (ema20_val < ema100_val) or (ema20_val < ema200_val)
         target     = 0.0 if full_exit else 0.50
-        qqq_shares = portfolio_value * target / qqq_px
+        # Execute at next day's midpoint
+        qqq_shares = portfolio_value * target / qqq_exec_px
         cash       = portfolio_value * (1 - target)
         exposure   = target
         incrementing_active = False; last_blend_ref = None
@@ -440,7 +470,8 @@ for date, row in bt_df.iterrows():
         if incrementing_active and exposure < 1.0 and last_blend_ref is not None:
             if (blend_px - last_blend_ref) / last_blend_ref >= 0.01:
                 target = min(exposure + 0.10, 1.0)
-                qqq_shares = portfolio_value * target / qqq_px
+                # Execute at next day's midpoint
+                qqq_shares = portfolio_value * target / qqq_exec_px
                 cash = portfolio_value * (1 - target)
                 exposure = target; last_blend_ref = blend_px
                 if exposure >= 1.0: incrementing_active = False
