@@ -656,7 +656,8 @@ def get_qqq_holdings():
         }
         resp   = requests.get(url, headers=headers, timeout=15)
         resp.raise_for_status()
-        tables = pd.read_html(resp.text)
+        import io
+        tables = pd.read_html(io.StringIO(resp.text))
         for table in tables:
             cols = [c.lower() for c in table.columns]
             if 'ticker' in cols or 'symbol' in cols:
