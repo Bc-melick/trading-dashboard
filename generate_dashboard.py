@@ -811,15 +811,27 @@ if not ss_prices.empty and 'QQQ' in ss_prices.columns:
  
         # RS 90-day
         if len(spx) >= 90 and qqq_90d_ret and abs(qqq_90d_ret) > 0.01:
-            s90         = (spx.iloc[-1] / spx.iloc[-90] - 1) * 100
-            rs_ratio_90 = s90 / qqq_90d_ret
+            s90 = (spx.iloc[-1] / spx.iloc[-90] - 1) * 100
+            if qqq_90d_ret > 0:
+                # Both directions normal — divide as usual
+                rs_ratio_90 = s90 / qqq_90d_ret
+            else:
+                # QQQ is negative — stock outperforms if it is up or down less
+                # Use return difference normalized to avoid sign flip
+                rs_ratio_90 = 1.0 + (s90 - qqq_90d_ret) / abs(qqq_90d_ret)
         else:
             s90 = rs_ratio_90 = None
  
         # RS 30-day
         if len(spx) >= 30 and qqq_30d_ret and abs(qqq_30d_ret) > 0.01:
-            s30         = (spx.iloc[-1] / spx.iloc[-30] - 1) * 100
-            rs_ratio_30 = s30 / qqq_30d_ret
+            s30 = (spx.iloc[-1] / spx.iloc[-30] - 1) * 100
+            if qqq_30d_ret > 0:
+                # Both directions normal — divide as usual
+                rs_ratio_30 = s30 / qqq_30d_ret
+            else:
+                # QQQ is negative — stock outperforms if it is up or down less
+                # Use return difference normalized to avoid sign flip
+                rs_ratio_30 = 1.0 + (s30 - qqq_30d_ret) / abs(qqq_30d_ret)
         else:
             s30 = rs_ratio_30 = None
  
