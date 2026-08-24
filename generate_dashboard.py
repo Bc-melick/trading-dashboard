@@ -18,6 +18,7 @@ Set these as GitHub Actions secrets named:
 
 import os
 import json
+from pathlib import Path
 import time
 import requests
 import numpy as np
@@ -633,6 +634,231 @@ LARGE_CAPS = [
     'SHOP','MELI','NU','KKR','APO','ARES','F','GM',
 ]
 
+# BLOCK 2 — QQQ holdings fetch + fundamentals cache + scoring functions
+# =============================================================================
+ 
+# ── Configuration ─────────────────────────────────────────────────────────────
+SS_CACHE_FILE     = Path('fundamentals_cache.json')
+SS_CACHE_MAX_DAYS = 7   # refresh fundamentals once per week
+ 
+# ── Auto-fetch current QQQ holdings from Wikipedia ────────────────────────────
+def get_qqq_holdings():
+    """
+    Scrape current Nasdaq-100 components from Wikipedia.
+    Falls back to a hard-coded list if the scrape fails.
+    """
+    try:
+        url     = 'https://en.wikipedia.org/wiki/List_of_NASDAQ-100_companies'
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                          'AppleWebKit/537.36 (KHTML, like Gecko) '
+                          'Chrome/120.0.0.0 Safari/537.36'
+        }
+        resp   = requests.get(url, headers=headers, timeout=15)
+        resp.raise_for_status()
+        tables = pd.read_html(resp.text)
+        for table in tables:
+            cols = [c.lower() for c in table.columns]
+            if 'ticker' in cols or 'symbol' in cols:
+                col      = 'Ticker' if 'Ticker' in table.columns else 'Symbol'
+                holdings = table[col].dropna().tolist()
+                holdings = [
+                    str(t).strip().replace('.', '-') for t in holdings
+                    if str(t).strip()
+                    and len(str(t).strip()) <= 6
+                    and str(t).strip().replace('-', '').isalpha()
+                ]
+                if len(holdings) >= 90:
+                    print(f"QQQ holdings: {len(holdings)} tickers from Wikipedia.")
+                    return holdings
+        raise ValueError("No valid table found.")
+    except Exception as e:
+        print(f"Wikipedia fetch failed ({e}). Using fallback list.")
+        return [
+            'AAPL','MSFT','NVDA','AMZN','GOOGL','GOOG','META','TSLA','AVGO','COST',
+            'NFLX','ASML','AZN','TMUS','CSCO','ADBE','AMD','PEP','INTU','QCOM',
+            'TXN','AMGN','HON','ISRG','BKNG','CMCSA','AMAT','ARM','VRTX','MU',
+            'PANW','ADP','GILD','ADI','MELI','SBUX','LRCX','REGN','KLAC','MDLZ',
+            'CTAS','CRWD','SNPS','CDNS','MRVL','CSX','ORLY','MAR','PYPL','FTNT',
+            'ABNB','PCAR','CEG','TTD','CPRT','WDAY','ROST','DXCM','PAYX','CHTR',
+            'KDP','FANG','FAST','AEP','GEHC','EA','BKR','VRSK','XEL','CTSH',
+            'DDOG','CCEP','ZS','IDXX','TEAM','ODFL','ON','GFS','CSGP','ANSS',
+            'CDW','BIIB','WBD','MRNA','DLTR','MDB','TTWO','ILMN','ALGN','SIRI',
+            'SMCI','PLTR','COIN','MCHP','NXPI','ADSK','ROP','MNST','APLS','GEHC',
+        ]
+ 
+# ── Fundamentals cache helpers ────────────────────────────────────────────────
+def ss_cache_is_fresh():
+    try:
+        if SS_CACHE_FILE.exists():
+            data = json.loads(SS_CACHE_FILE.read_text())
+            cached_on = datetime.fromisoformat(data.get('_cached_on', '2000-01-01'))
+            return (datetime.now() - cached_on).days < SS_CACHE_MAX_DAYS
+    except Exception:
+        pass
+    return False
+ 
+def ss_load_cache():
+    try:
+        if SS_CACHE_FILE.exists() and ss_cache_is_fresh():
+            return json.loads(SS_CACHE_FILE.read_text())
+    except Exception:
+        pass
+    return {}
+ 
+def ss_save_cache(data):
+    try:
+        data['_cached_on'] = datetime.now().isoformat()
+        SS_CACHE_FILE.write_text(json.dumps(data, indent=2))
+        print("Fundamentals cache saved.")
+    except Exception as e:
+        print(f"Cache save error: {e}")
+ 
+def ss_fetch_all_fundamentals(tickers, delay=0.3):
+    """Fetch fundamentals for all tickers — called only on weekly refresh."""
+    print(f"Refreshing fundamentals for {len(tickers)} tickers (weekly)...")
+    results = {}
+    for i, ticker in enumerate(tickers):
+        try:
+            info       = yf.Ticker(ticker).info
+            rev_growth = info.get('revenueGrowth', None)
+            net_margin = info.get('profitMargins', None)
+            if rev_growth is not None: rev_growth = round(float(rev_growth) * 100, 2)
+            if net_margin is not None: net_margin = round(float(net_margin) * 100, 2)
+            results[ticker] = {'rev_growth': rev_growth, 'net_margin': net_margin}
+            if (i + 1) % 20 == 0:
+                print(f"  {i+1}/{len(tickers)} done...")
+            time.sleep(delay)
+        except Exception:
+            results[ticker] = {'rev_growth': None, 'net_margin': None}
+            time.sleep(delay)
+    print("Fundamentals refresh complete.")
+    return results
+ 
+def ss_get_fundamentals(tickers):
+    """Return fundamentals from cache if fresh, otherwise fetch and cache."""
+    cache = ss_load_cache()
+    if not cache or not ss_cache_is_fresh() or any(t not in cache for t in tickers):
+        fresh = ss_fetch_all_fundamentals(tickers)
+        ss_save_cache(fresh)
+        return fresh
+    print("Using cached fundamentals.")
+    return cache
+ 
+# ── Scoring functions ─────────────────────────────────────────────────────────
+def ss_score_rs_90(rs_ratio):
+    """90-day RS: stackable ±2."""
+    if rs_ratio is None: return 0
+    score = 0
+    if rs_ratio > 1.0: score += 1
+    if rs_ratio > 1.2: score += 1
+    if rs_ratio < 1.0: score -= 1
+    if rs_ratio < 0.8: score -= 1
+    return score
+ 
+def ss_score_rs_30(rs_ratio_30):
+    """30-day RS: simple ±1."""
+    if rs_ratio_30 is None: return 0
+    return 1 if rs_ratio_30 > 1.0 else -1
+ 
+def ss_score_rs_accel(rs_30, rs_90):
+    """RS Acceleration: difference > 0.1 = +1, < -0.1 = -1."""
+    if rs_30 is None or rs_90 is None: return 0
+    diff = rs_30 - rs_90
+    if diff > 0.1:    return 1
+    elif diff < -0.1: return -1
+    return 0
+ 
+def ss_score_rev(rev):
+    if rev is None: return 0
+    if rev > 15:   return 2
+    elif rev >= 5: return 1
+    elif rev < 0:  return -1
+    return 0
+ 
+def ss_score_margin(mgn):
+    if mgn is None: return 0
+    if mgn > 15:   return 2
+    elif mgn >= 5: return 1
+    elif mgn < 0:  return -1
+    return 0
+ 
+def ss_rating(score):
+    if score >= 5:   return 'Buy'
+    elif score >= 2: return 'Neutral'
+    else:            return 'Sell'
+ 
+# ── Run security selection ────────────────────────────────────────────────────
+print("Running security selection...")
+qqq_holdings  = get_qqq_holdings()
+ss_fund_data  = ss_get_fundamentals(qqq_holdings)
+ss_all_tickers = list(set(qqq_holdings + ['QQQ']))
+ss_prices     = fetch_closes(ss_all_tickers,
+                             datetime.now() - timedelta(days=200),
+                             datetime.now())
+ 
+ss_results = []
+if not ss_prices.empty and 'QQQ' in ss_prices.columns:
+    qqq_px      = ss_prices['QQQ'].dropna()
+    qqq_90d_ret = (qqq_px.iloc[-1] / qqq_px.iloc[-90] - 1) * 100 if len(qqq_px) >= 90 else None
+    qqq_30d_ret = (qqq_px.iloc[-1] / qqq_px.iloc[-30] - 1) * 100 if len(qqq_px) >= 30 else None
+ 
+    for ticker in qqq_holdings:
+        if ticker not in ss_prices.columns: continue
+        spx = ss_prices[ticker].dropna()
+        if len(spx) < 5: continue
+ 
+        # RS 90-day
+        if len(spx) >= 90 and qqq_90d_ret and abs(qqq_90d_ret) > 0.01:
+            s90         = (spx.iloc[-1] / spx.iloc[-90] - 1) * 100
+            rs_ratio_90 = s90 / qqq_90d_ret
+        else:
+            s90 = rs_ratio_90 = None
+ 
+        # RS 30-day
+        if len(spx) >= 30 and qqq_30d_ret and abs(qqq_30d_ret) > 0.01:
+            s30         = (spx.iloc[-1] / spx.iloc[-30] - 1) * 100
+            rs_ratio_30 = s30 / qqq_30d_ret
+        else:
+            s30 = rs_ratio_30 = None
+ 
+        # Fundamentals
+        fund = ss_fund_data.get(ticker, {})
+        rev  = fund.get('rev_growth', None)
+        mgn  = fund.get('net_margin', None)
+ 
+        rs90_s = ss_score_rs_90(rs_ratio_90)
+        rs30_s = ss_score_rs_30(rs_ratio_30)
+        acc_s  = ss_score_rs_accel(rs_ratio_30, rs_ratio_90)
+        rev_s  = ss_score_rev(rev)
+        mar_s  = ss_score_margin(mgn)
+        total  = rs90_s + rs30_s + acc_s + rev_s + mar_s
+ 
+        ss_results.append({
+            'Ticker':           ticker,
+            'Rating':           ss_rating(total),
+            'Score':            total,
+            'RS90_Score':       rs90_s,
+            'RS30_Score':       rs30_s,
+            'Accel_Score':      acc_s,
+            'Rev_Score':        rev_s,
+            'Margin_Score':     mar_s,
+            'RS_Ratio_90d':     round(rs_ratio_90, 3) if rs_ratio_90 is not None else None,
+            'RS_Ratio_30d':     round(rs_ratio_30, 3) if rs_ratio_30 is not None else None,
+            'RS_Accel':         round(rs_ratio_30 - rs_ratio_90, 3) if rs_ratio_30 is not None and rs_ratio_90 is not None else None,
+            '90d_Return_Pct':   round(s90, 2) if s90 is not None else None,
+            '30d_Return_Pct':   round(s30, 2) if s30 is not None else None,
+            'Rev_Growth_Pct':   rev,
+            'Net_Margin_Pct':   mgn,
+        })
+ 
+ss_df = pd.DataFrame(ss_results).sort_values('Score', ascending=False).reset_index(drop=True)
+ss_df.index += 1
+print(f"Security selection complete: {len(ss_df)} stocks scored. "
+      f"Buy:{(ss_df['Rating']=='Buy').sum()} "
+      f"Neutral:{(ss_df['Rating']=='Neutral').sum()} "
+      f"Sell:{(ss_df['Rating']=='Sell').sum()}")
+
 # Fetch enough history to cover 1 year for all timeframes in one call
 market_start   = datetime.now() - timedelta(days=370)
 sector_tickers = list(SECTOR_ETFS.values())
@@ -1201,6 +1427,83 @@ def news_list(articles, fallback):
         </div>'''
     return items
 
+# BLOCK 3 — Build security selection HTML table
+# =============================================================================
+ 
+def ss_badge(rating):
+    cfg = {'Buy': ('#4ade80','#0f172a'), 'Neutral': ('#fbbf24','#0f172a'), 'Sell': ('#f87171','#0f172a')}
+    bg, fg = cfg.get(rating, ('#94a3b8','#0f172a'))
+    return (f'<span style="background:{bg};color:{fg};padding:2px 10px;'
+            f'border-radius:12px;font-weight:700;font-size:0.78rem">{rating}</span>')
+ 
+def ss_fmt(v, suffix=''):
+    if v is None or (not isinstance(v, str) and pd.isna(v)):
+        return '<span style="color:#475569">N/A</span>'
+    color = '#4ade80' if isinstance(v, (int,float)) and v > 0 else \
+            '#f87171' if isinstance(v, (int,float)) and v < 0 else '#e2e8f0'
+    return f'<span style="color:{color}">{v}{suffix}</span>'
+ 
+def ss_score_cell(s):
+    color = '#4ade80' if s >= 4 else '#fbbf24' if s >= 1 else '#f87171'
+    return f'<span style="color:{color};font-weight:700">{s:+d}</span>'
+ 
+ss_buy_n     = int((ss_df['Rating'] == 'Buy').sum())
+ss_neutral_n = int((ss_df['Rating'] == 'Neutral').sum())
+ss_sell_n    = int((ss_df['Rating'] == 'Sell').sum())
+ 
+ss_rows_html = ''
+for rank, row in ss_df.iterrows():
+    ss_rows_html += (
+        f'<tr>'
+        f'<td>{rank}</td>'
+        f'<td style="font-weight:700;color:#e2e8f0">{row["Ticker"]}</td>'
+        f'<td>{ss_badge(row["Rating"])}</td>'
+        f'<td>{ss_score_cell(row["Score"])}</td>'
+        f'<td>{ss_fmt(row["RS90_Score"])}</td>'
+        f'<td>{ss_fmt(row["RS30_Score"])}</td>'
+        f'<td>{ss_fmt(row["Accel_Score"])}</td>'
+        f'<td>{ss_fmt(row["Rev_Score"])}</td>'
+        f'<td>{ss_fmt(row["Margin_Score"])}</td>'
+        f'<td>{ss_fmt(row["RS_Ratio_90d"])}</td>'
+        f'<td>{ss_fmt(row["RS_Ratio_30d"])}</td>'
+        f'<td>{ss_fmt(row["RS_Accel"])}</td>'
+        f'<td>{ss_fmt(row["90d_Return_Pct"], "%")}</td>'
+        f'<td>{ss_fmt(row["30d_Return_Pct"], "%")}</td>'
+        f'<td>{ss_fmt(row["Rev_Growth_Pct"], "%")}</td>'
+        f'<td>{ss_fmt(row["Net_Margin_Pct"], "%")}</td>'
+        f'</tr>'
+    )
+ 
+security_selection_html = f"""
+<div style="display:flex;gap:14px;margin-bottom:18px;flex-wrap:wrap">
+  <span style="background:#1a3d2b;color:#4ade80;padding:6px 18px;border-radius:20px;font-size:0.85rem;font-weight:700">✅ Buy: {ss_buy_n}</span>
+  <span style="background:#3d3310;color:#fbbf24;padding:6px 18px;border-radius:20px;font-size:0.85rem;font-weight:700">🔶 Neutral: {ss_neutral_n}</span>
+  <span style="background:#3d1010;color:#f87171;padding:6px 18px;border-radius:20px;font-size:0.85rem;font-weight:700">❌ Sell: {ss_sell_n}</span>
+</div>
+<div style="overflow-x:auto">
+<table>
+  <thead><tr>
+    <th>Rank</th><th>Ticker</th><th>Rating</th><th>Score</th>
+    <th>RS90 Score</th><th>RS30 Score</th><th>Accel Score</th>
+    <th>Rev Score</th><th>Margin Score</th>
+    <th>RS Ratio 90d</th><th>RS Ratio 30d</th><th>RS Accel</th>
+    <th>90d Return</th><th>30d Return</th>
+    <th>Rev Growth</th><th>Net Margin</th>
+  </tr></thead>
+  <tbody>{ss_rows_html}</tbody>
+</table>
+</div>
+<p class="muted" style="margin-top:10px">
+  RS90 (90d stock÷QQQ): &gt;1.2=+2, &gt;1.0=+1, &lt;0.8=−2, &lt;1.0=−1 &bull;
+  RS30 (30d stock÷QQQ): &gt;1.0=+1, &lt;1.0=−1 &bull;
+  Accel (RS30−RS90): &gt;0.1=+1, &lt;−0.1=−1 &bull;
+  Rev Growth: &gt;15%=+2, 5–15%=+1, &lt;0%=−1 &bull;
+  Margin: &gt;15%=+2, 5–15%=+1, &lt;0%=−1 &bull;
+  Buy≥5 · Neutral 2–4 · Sell≤1 &bull;
+  Fundamentals refreshed weekly
+</p>
+"""
+
 geo_html   = news_list(geo_news,   'Add NEWS_API_KEY as a GitHub Actions secret to enable live news headlines. Sign up free at newsapi.org/register')
 macro_html = news_list(macro_news, 'Add NEWS_API_KEY as a GitHub Actions secret to enable live news headlines. Sign up free at newsapi.org/register')
 
@@ -1500,6 +1803,12 @@ html = f"""<!DOCTYPE html>
       <thead><tr><th>Rank</th><th>Ticker</th><th>Return</th></tr></thead>
       <tbody id="stock-tbody"></tbody>
     </table>
+  </div>
+
+<!-- SECURITY SELECTION -->
+  <div class="section">
+    <h2>QQQ Holdings — Security Selection</h2>
+    {security_selection_html}
   </div>
 
   <!-- NEWS -->
