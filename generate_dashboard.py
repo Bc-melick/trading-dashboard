@@ -1085,6 +1085,154 @@ else:
     macro_rows_data = yf_macro_fallback()
 
 # =============================================================================
+# FEAR & GREED INDICATOR
+# Composite score 0-100 built from 4 freely available market signals:
+#   1. VIX Level          — absolute volatility (high VIX = fear)
+#   2. VIX Trend          — VIX vs its own 52-week average (rising = fear)
+#   3. S&P 500 Momentum   — SPX vs its 125-day moving average
+#   4. Junk Bond Demand   — HYG return vs LQD return (junk outperforming = greed)
+#
+# Each sub-indicator scores 0-100. Composite = equal-weighted average.
+# Labels: 0-20 Extreme Fear | 21-40 Fear | 41-60 Neutral | 61-80 Greed | 81-100 Extreme Greed
+# =============================================================================
+ 
+def calc_fear_greed():
+    """
+    Calculate a composite Fear & Greed score (0-100) from 4 market signals.
+    Returns a dict with the composite score, label, color, and each sub-indicator.
+    """
+    try:
+        # Fetch all needed data in one call where possible
+        fg_tickers  = ['^VIX', '^GSPC', 'HYG', 'LQD']
+        fg_start    = datetime.now() - timedelta(days=400)  # ~1 year + buffer
+        fg_raw      = yf.download(fg_tickers, start=fg_start,
+                                  end=datetime.now(), auto_adjust=True,
+                                  progress=False, group_by='ticker')
+ 
+        def get_close(ticker):
+            try:
+                if isinstance(fg_raw.columns, pd.MultiIndex):
+                    s = fg_raw[ticker]['Close'].dropna()
+                else:
+                    s = fg_raw['Close'].dropna()
+                # Normalise index to plain dates
+                s.index = pd.to_datetime([str(d)[:10] for d in s.index])
+                s = s[~s.index.duplicated(keep='last')].sort_index()
+                return s
+            except Exception:
+                return pd.Series(dtype=float)
+ 
+        vix_s   = get_close('^VIX')
+        spx_s   = get_close('^GSPC')
+        hyg_s   = get_close('HYG')
+        lqd_s   = get_close('LQD')
+ 
+        sub_scores  = {}
+        sub_details = {}
+ 
+        # ── 1. VIX Level ─────────────────────────────────────────────────────
+        # VIX range historically: ~10 (extreme greed) to ~80 (extreme fear)
+        # Map inversely: low VIX = high score (greed), high VIX = low score (fear)
+        if not vix_s.empty:
+            vix_now  = round(float(vix_s.iloc[-1]), 2)
+            # Clamp to historical range 10-50 for scoring
+            vix_clamped = max(10, min(50, vix_now))
+            vix_score   = round(100 - ((vix_clamped - 10) / 40 * 100), 1)
+            sub_scores['vix_level']  = vix_score
+            sub_details['vix_level'] = {
+                'label':  'VIX Level',
+                'value':  f'{vix_now:.2f}',
+                'score':  vix_score,
+                'detail': 'Low VIX = Greed, High VIX = Fear',
+            }
+ 
+        # ── 2. VIX Trend ─────────────────────────────────────────────────────
+        # Compare current VIX to its 52-week average
+        # VIX below its 1yr avg = greed (calm relative to history)
+        # VIX above its 1yr avg = fear (elevated relative to history)
+        if len(vix_s) >= 252:
+            vix_now      = float(vix_s.iloc[-1])
+            vix_1yr_avg  = float(vix_s.iloc[-252:].mean())
+            vix_ratio    = vix_now / vix_1yr_avg   # <1 = greed, >1 = fear
+            # Map ratio: 0.5 (very calm) = 100, 2.0 (double avg) = 0
+            vix_trend_sc = round(max(0, min(100, (2.0 - vix_ratio) / 1.5 * 100)), 1)
+            sub_scores['vix_trend']  = vix_trend_sc
+            sub_details['vix_trend'] = {
+                'label':  'VIX Trend',
+                'value':  f'{vix_ratio:.2f}x 52wk avg',
+                'score':  vix_trend_sc,
+                'detail': 'VIX vs its 52-week average',
+            }
+ 
+        # ── 3. S&P 500 Momentum ───────────────────────────────────────────────
+        # SPX vs its 125-day moving average
+        # Above 125d MA = greed, below = fear
+        if len(spx_s) >= 125:
+            spx_now    = float(spx_s.iloc[-1])
+            spx_ma125  = float(spx_s.iloc[-125:].mean())
+            spx_pct    = (spx_now / spx_ma125 - 1) * 100  # % above/below MA
+            # Map: +10% above MA = ~100 (extreme greed), -10% below = ~0 (extreme fear)
+            spx_score  = round(max(0, min(100, 50 + spx_pct * 5)), 1)
+            sub_scores['spx_momentum']  = spx_score
+            sub_details['spx_momentum'] = {
+                'label':  'S&P 500 Momentum',
+                'value':  f'{spx_pct:+.2f}% vs 125d MA',
+                'score':  spx_score,
+                'detail': 'SPX relative to its 125-day moving average',
+            }
+ 
+        # ── 4. Junk Bond Demand ───────────────────────────────────────────────
+        # HYG (junk) return vs LQD (investment grade) over 20 trading days
+        # Junk outperforming = risk-on = greed
+        if len(hyg_s) >= 20 and len(lqd_s) >= 20:
+            hyg_ret   = (float(hyg_s.iloc[-1]) / float(hyg_s.iloc[-20]) - 1) * 100
+            lqd_ret   = (float(lqd_s.iloc[-1]) / float(lqd_s.iloc[-20]) - 1) * 100
+            spread    = hyg_ret - lqd_ret   # positive = junk outperforming = greed
+            # Map: +3% spread = 100 (extreme greed), -3% = 0 (extreme fear)
+            junk_score = round(max(0, min(100, 50 + spread * 16.67)), 1)
+            sub_scores['junk_bond']  = junk_score
+            sub_details['junk_bond'] = {
+                'label':  'Junk Bond Demand',
+                'value':  f'HYG {hyg_ret:+.2f}% vs LQD {lqd_ret:+.2f}% (20d)',
+                'score':  junk_score,
+                'detail': 'High-yield vs investment-grade bond 20-day return',
+            }
+ 
+        # ── Composite Score ───────────────────────────────────────────────────
+        if not sub_scores:
+            return None
+ 
+        composite = round(sum(sub_scores.values()) / len(sub_scores), 1)
+ 
+        # Label and color
+        if composite <= 20:
+            label = 'Extreme Fear'; color = '#dc2626'; bg = 'rgba(220,38,38,0.15)'
+        elif composite <= 40:
+            label = 'Fear';         color = '#f87171'; bg = 'rgba(248,113,113,0.12)'
+        elif composite <= 60:
+            label = 'Neutral';      color = '#fbbf24'; bg = 'rgba(251,191,36,0.12)'
+        elif composite <= 80:
+            label = 'Greed';        color = '#4ade80'; bg = 'rgba(74,222,128,0.12)'
+        else:
+            label = 'Extreme Greed'; color = '#16a34a'; bg = 'rgba(22,163,74,0.20)'
+ 
+        return {
+            'composite': composite,
+            'label':     label,
+            'color':     color,
+            'bg':        bg,
+            'details':   sub_details,
+        }
+ 
+    except Exception as e:
+        print(f'Fear & Greed calculation failed: {e}')
+        return None
+ 
+ 
+print("Calculating Fear & Greed indicator...")
+fg_data = calc_fear_greed()
+
+# =============================================================================
 # NEWS via NewsAPI
 # =============================================================================
 
@@ -1426,6 +1574,99 @@ mac_rows = [
     for m in macro_rows_data
 ]
 macro_table = html_table(mac_headers, mac_rows)
+
+# =============================================================================
+# BLOCK 2 — Build Fear & Greed HTML
+# =============================================================================
+def build_fg_html(fg):
+    """Build the Fear & Greed HTML section."""
+    if fg is None:
+        return '<p class="muted">Fear &amp; Greed data unavailable.</p>'
+ 
+    score   = fg['composite']
+    label   = fg['label']
+    color   = fg['color']
+    bg      = fg['bg']
+    details = fg['details']
+ 
+    # Gauge bar — filled left to right based on score
+    gauge_html = f"""
+    <div style="margin-bottom:20px">
+      <div style="display:flex;justify-content:space-between;
+                  font-size:0.72rem;color:#64748b;margin-bottom:6px">
+        <span>Extreme Fear</span><span>Fear</span>
+        <span>Neutral</span><span>Greed</span><span>Extreme Greed</span>
+      </div>
+      <div style="position:relative;height:14px;border-radius:7px;
+                  background:linear-gradient(90deg,
+                    #dc2626 0%,#f87171 25%,#fbbf24 50%,#4ade80 75%,#16a34a 100%);
+                  overflow:hidden">
+        <div style="position:absolute;top:0;left:0;right:0;bottom:0;
+                    background:rgba(6,13,31,0.55);
+                    clip-path:polygon({score}% 0%,100% 0%,100% 100%,{score}% 100%)">
+        </div>
+      </div>
+      <div style="position:relative;height:16px;margin-top:2px">
+        <div style="position:absolute;left:{score}%;transform:translateX(-50%);
+                    font-size:0.75rem;color:{color};font-weight:700">▲</div>
+      </div>
+    </div>"""
+ 
+    # Composite score badge
+    badge_html = f"""
+    <div style="display:flex;align-items:center;gap:20px;margin-bottom:22px;
+                background:{bg};border-radius:10px;padding:14px 18px">
+      <div style="font-size:2.8rem;font-weight:800;color:{color};line-height:1">
+        {score:.0f}
+      </div>
+      <div>
+        <div style="font-size:1.1rem;font-weight:700;color:{color}">{label}</div>
+        <div style="font-size:0.78rem;color:#64748b;margin-top:2px">
+          Composite Fear &amp; Greed Score (0 = Extreme Fear, 100 = Extreme Greed)
+        </div>
+      </div>
+    </div>"""
+ 
+    # Sub-indicator breakdown table
+    def sub_score_bar(s):
+        if s <= 20:   sc = '#dc2626'
+        elif s <= 40: sc = '#f87171'
+        elif s <= 60: sc = '#fbbf24'
+        elif s <= 80: sc = '#4ade80'
+        else:         sc = '#16a34a'
+        return (f'<div style="display:flex;align-items:center;gap:8px">'
+                f'<div style="flex:1;height:6px;border-radius:3px;background:#1e293b">'
+                f'<div style="width:{s}%;height:100%;border-radius:3px;background:{sc}"></div>'
+                f'</div>'
+                f'<span style="font-size:0.78rem;color:{sc};font-weight:700;min-width:32px">{s:.0f}</span>'
+                f'</div>')
+ 
+    rows_html = ''
+    for key, d in details.items():
+        rows_html += (
+            f'<tr>'
+            f'<td style="color:#e2e8f0;font-weight:600">{d["label"]}</td>'
+            f'<td style="color:#94a3b8">{d["value"]}</td>'
+            f'<td style="min-width:160px">{sub_score_bar(d["score"])}</td>'
+            f'</tr>'
+        )
+ 
+    breakdown_html = f"""
+    <table style="font-size:0.84rem">
+      <thead><tr>
+        <th>Indicator</th><th>Current Value</th><th>Score (0-100)</th>
+      </tr></thead>
+      <tbody>{rows_html}</tbody>
+    </table>
+    <p class="muted" style="margin-top:10px">
+      VIX data via Yahoo Finance &bull; Updated daily &bull;
+      Score: 0–20 Extreme Fear · 21–40 Fear · 41–60 Neutral · 61–80 Greed · 81–100 Extreme Greed
+    </p>"""
+ 
+    return gauge_html + badge_html + breakdown_html
+ 
+ 
+fg_html = build_fg_html(fg_data)
 
 # News sections
 def news_list(articles, fallback):
@@ -1805,6 +2046,12 @@ html = f"""<!DOCTYPE html>
       <h2>Macro Indicators</h2>
       {macro_table}
     </div>
+  </div>
+  
+  <!-- FEAR & GREED -->
+  <div class="section">
+    <h2>Fear &amp; Greed Indicator</h2>
+    {fg_html}
   </div>
 
   <!-- TOP 20 STOCKS -->
