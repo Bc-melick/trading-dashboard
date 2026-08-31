@@ -1457,7 +1457,10 @@ def ss_fmt(v, suffix=''):
     return f'<span style="color:{color}">{v}{suffix}</span>'
  
 def ss_score_cell(s):
-    color = '#4ade80' if s >= 4 else '#fbbf24' if s >= 1 else '#f87171'
+    if s >= 7:   color = '#16a34a'   # dark green (+7/+8)
+    elif s >= 5: color = '#4ade80'   # medium green (+5/+6)
+    elif s >= 2: color = '#fbbf24'   # yellow (Neutral)
+    else:        color = '#f87171'   # red (Sell)
     return f'<span style="color:{color};font-weight:700">{s:+d}</span>'
  
 ss_buy_n     = int((ss_df['Rating'] == 'Buy').sum())
@@ -1466,17 +1469,19 @@ ss_sell_n    = int((ss_df['Rating'] == 'Sell').sum())
  
 ss_rows_html = ''
 for rank, row in ss_df.iterrows():
+    score  = row['Score']
+    rating = row['Rating']
+    if rating == 'Buy':
+        bg = 'rgba(22,163,74,0.25)' if score >= 7 else 'rgba(74,222,128,0.12)'
+    elif rating == 'Neutral':
+        bg = 'rgba(251,191,36,0.08)'
+    else:
+        bg = 'rgba(248,113,113,0.08)'
     ss_rows_html += (
-        f'<tr>'
+        f'<tr style="background:{bg}">'
         f'<td>{rank}</td>'
         f'<td style="font-weight:700;color:#e2e8f0">{row["Ticker"]}</td>'
         f'<td>{ss_badge(row["Rating"])}</td>'
-        f'<td>{ss_score_cell(row["Score"])}</td>'
-        f'<td>{ss_fmt(row["RS90_Score"])}</td>'
-        f'<td>{ss_fmt(row["RS30_Score"])}</td>'
-        f'<td>{ss_fmt(row["Accel_Score"])}</td>'
-        f'<td>{ss_fmt(row["Rev_Score"])}</td>'
-        f'<td>{ss_fmt(row["Margin_Score"])}</td>'
         f'<td>{ss_fmt(row["RS_Ratio_90d"])}</td>'
         f'<td>{ss_fmt(row["RS_Ratio_30d"])}</td>'
         f'<td>{ss_fmt(row["RS_Accel"])}</td>'
@@ -1496,9 +1501,7 @@ security_selection_html = f"""
 <div style="overflow-x:auto">
 <table>
   <thead><tr>
-    <th>Rank</th><th>Ticker</th><th>Rating</th><th>Score</th>
-    <th>RS90 Score</th><th>RS30 Score</th><th>Accel Score</th>
-    <th>Rev Score</th><th>Margin Score</th>
+    <th>Rank</th><th>Ticker</th><th>Rating</th>
     <th>RS Ratio 90d</th><th>RS Ratio 30d</th><th>RS Accel</th>
     <th>90d Return</th><th>30d Return</th>
     <th>Rev Growth</th><th>Net Margin</th>
@@ -1820,7 +1823,7 @@ html = f"""<!DOCTYPE html>
 
 <!-- SECURITY SELECTION -->
   <div class="section">
-    <h2>QQQ Holdings — Security Selection</h2>
+    <h2>Nasdaq 100 — Security Selection</h2>
     {security_selection_html}
   </div>
 
