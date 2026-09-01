@@ -127,7 +127,7 @@ def calculate_macd(series, short=12, long=26, signal=9):
 # STRATEGY — signal generation (mirrors trading_strategy.py exactly)
 # =============================================================================
 
-all_tickers = list(weights.keys()) + ['QQQ']
+all_tickers = list(weights.keys()) + ['QQQ', 'TQQQ']
 ohlc_data   = fetch_ohlc(all_tickers, start_date, end_date)
 
 close_data = ohlc_data['Close']
@@ -149,6 +149,11 @@ spy_price  = close_data['SPY']
 # Next-day midpoint for trade execution: (next day High + next day Low) / 2
 qqq_midpoint = ((qqq_high + qqq_low) / 2).shift(-1)
 qqq_midpoint.iloc[-1] = qqq_close.iloc[-1]  # fallback for last day
+tqqq_close   = close_data['TQQQ']
+tqqq_high    = high_data['TQQQ']
+tqqq_low     = low_data['TQQQ']
+tqqq_midpoint = ((tqqq_high + tqqq_low) / 2).shift(-1)
+tqqq_midpoint.iloc[-1] = tqqq_close.iloc[-1]  # fallback for last day
 
 # Fetch S&P 500 index (^GSPC) for signal banner prices
 # Use yf.download directly with a try/except since ^GSPC can behave
@@ -490,6 +495,92 @@ spy_shares = STARTING_CAPITAL / bt_spy.iloc[0]
 bt_results['Benchmark_Value']         = (spy_shares * bt_spy).values
 bt_results['Strategy_Cumulative_Pct'] = ((bt_results['Portfolio_Value']  / STARTING_CAPITAL - 1) * 100).round(2)
 bt_results['SPY_Cumulative_Pct']      = ((bt_results['Benchmark_Value']  / STARTING_CAPITAL - 1) * 100).round(2)
+
+# =============================================================================
+# Leveraged backtest engine
+# =============================================================================
+bt_tqqq     = tqqq_close[bt_mask].copy()
+bt_tqqq_mid = tqqq_midpoint[bt_mask].copy()
+ 
+lev_portfolio_value = STARTING_CAPITAL
+lev_exposure        = 1.0
+lev_shares          = (lev_portfolio_value * lev_exposure) / bt_tqqq_mid.iloc[0]
+lev_cash            = 0.0
+lev_incrementing    = False
+lev_blend_ref       = None
+lev_records         = []
+ 
+for date, row in bt_df.iterrows():
+    tqqq_px      = bt_tqqq.loc[date]
+    tqqq_exec_px = bt_tqqq_mid.loc[date]
+    blend_px     = bt_blend.loc[date]
+    signal       = row['Signal']
+    buy_cond     = row['Condition']
+ 
+    lev_portfolio_value = lev_shares * tqqq_px + lev_cash
+ 
+    if signal == 'Buy':
+        if buy_cond in ('cross_200', 'cross_100', 'cross_20_inverse', 'macd'):
+            lev_shares       = lev_portfolio_value / tqqq_exec_px
+            lev_cash         = 0.0; lev_exposure = 1.0
+            lev_incrementing = False; lev_blend_ref = None
+        elif buy_cond == 'cross_50':
+            target           = min(lev_exposure + 0.10, 1.0)
+            lev_shares       = lev_portfolio_value * target / tqqq_exec_px
+            lev_cash         = lev_portfolio_value * (1 - target)
+            lev_exposure     = target
+            lev_incrementing = True; lev_blend_ref = blend_px
+ 
+    elif signal == 'Reduce':
+        ema20_val  = bt_df.loc[date, 'EMA_20']
+        ema100_val = bt_df.loc[date, 'EMA_100']
+        ema200_val = bt_df.loc[date, 'EMA_200']
+        full_exit  = (ema20_val < ema100_val) or (ema20_val < ema200_val)
+        target     = 0.0 if full_exit else 0.50
+        lev_shares = lev_portfolio_value * target / tqqq_exec_px
+        lev_cash   = lev_portfolio_value * (1 - target)
+        lev_exposure     = target
+        lev_incrementing = False; lev_blend_ref = None
+ 
+    else:
+        if lev_incrementing and lev_exposure < 1.0 and lev_blend_ref is not None:
+            if (blend_px - lev_blend_ref) / lev_blend_ref >= 0.01:
+                target       = min(lev_exposure + 0.10, 1.0)
+                lev_shares   = lev_portfolio_value * target / tqqq_exec_px
+                lev_cash     = lev_portfolio_value * (1 - target)
+                lev_exposure = target; lev_blend_ref = blend_px
+                if lev_exposure >= 1.0: lev_incrementing = False
+ 
+    lev_portfolio_value = lev_shares * tqqq_px + lev_cash
+    lev_records.append({
+        'Date':            date,
+        'Portfolio_Value': round(lev_portfolio_value, 2),
+        'Exposure_Pct':    round(lev_exposure * 100, 2),
+        'Signal':          signal,
+    })
+ 
+lev_results = pd.DataFrame(lev_records).set_index('Date')
+lev_results['Benchmark_Value']         = bt_results['Benchmark_Value']
+lev_results['Strategy_Cumulative_Pct'] = ((lev_results['Portfolio_Value'] / STARTING_CAPITAL - 1) * 100).round(2)
+lev_results['SPY_Cumulative_Pct']      = ((lev_results['Benchmark_Value'] / STARTING_CAPITAL - 1) * 100).round(2)
+ 
+# Annual performance for leveraged strategy
+lev_annual_rows = []
+current_year_lev = datetime.now().year
+lev_results['Year'] = lev_results.index.year
+for year, grp in lev_results.groupby('Year'):
+    if year == current_year_lev:
+        ytd_start_ts = pd.Timestamp(datetime(current_year_lev, 1, 1))
+        grp_ytd = lev_results[lev_results.index >= ytd_start_ts]
+        if len(grp_ytd) < 2: grp_ytd = grp
+        sr = round((grp_ytd['Portfolio_Value'].iloc[-1] / grp_ytd['Portfolio_Value'].iloc[0] - 1) * 100, 2)
+    else:
+        sr = round((grp['Portfolio_Value'].iloc[-1] / grp['Portfolio_Value'].iloc[0] - 1) * 100, 2)
+    lev_annual_rows.append({'Year': int(year), 'Leveraged': sr})
+lev_annual_df = pd.DataFrame(lev_annual_rows).set_index('Year')
+ 
+print(f"Leveraged Strategy (TQQQ) — End Value: ${lev_results['Portfolio_Value'].iloc[-1]:,.0f} | "
+      f"Total Return: {lev_results['Strategy_Cumulative_Pct'].iloc[-1]:.1f}%")
 
 # =============================================================================
 # PERFORMANCE METRICS
@@ -1486,6 +1577,24 @@ else:
 # ASSEMBLE HTML
 # =============================================================================
 
+# ── Leveraged trailing returns ────────────────────────────────────────────────
+lev_v    = lev_results['Portfolio_Value']
+lev_ytd  = ytd_return(lev_v)
+lev_1yr  = ann_period_return(lev_v, 252)
+lev_3yr  = ann_period_return(lev_v, 756)
+lev_5yr  = ann_period_return(lev_v, 1260)
+lev_all  = period_return(lev_v)
+lev_ann  = ann_return(lev_v)
+lev_mdd  = max_drawdown(lev_v)
+
+GOLD_HEADER = 'background:#92400e;color:#fef3c7'
+GOLD_CELL   = 'border-left:2px solid #f59e0b;color:#fbbf24'
+
+def fmt_lev(v):
+    sign  = '+' if v >= 0 else ''
+    color = '#4ade80' if v >= 0 else '#f87171'
+    return f'<span style="color:{color};font-weight:600">{sign}{v:.2f}%</span>'
+
 def fmt_pct(v):
     sign = '+' if v >= 0 else ''
     color = '#4ade80' if v >= 0 else '#f87171'
@@ -1508,43 +1617,56 @@ s3yr_b = ann_period_return(bench_v, 756)
 s5yr_s = ann_period_return(strat_v, 1260)
 s5yr_b = ann_period_return(bench_v, 1260)
 
-ret_headers = ['Period', 'Strategy', 'SPY B&H', 'Alpha']
+ret_headers = ['Period', 'Strategy (QQQ)', 'SPY B&H', 'Alpha',
+               f'<span style="{GOLD_HEADER};padding:3px 8px;border-radius:4px">⚡ Leveraged (TQQQ)</span>']
 ret_rows = [
     ['YTD',
         fmt_pct(metrics['strat']['ytd']),
         fmt_pct(metrics['bench']['ytd']),
-        fmt_pct(metrics['strat']['ytd'] - metrics['bench']['ytd'])],
+        fmt_pct(metrics['strat']['ytd'] - metrics['bench']['ytd']),
+        f'<span style="{GOLD_CELL}">{fmt_lev(lev_ytd)}</span>'],
     ['1 Year (Ann.)',
-        fmt_pct(s1yr_s),
-        fmt_pct(s1yr_b),
-        fmt_pct(s1yr_s - s1yr_b)],
+        fmt_pct(s1yr_s), fmt_pct(s1yr_b), fmt_pct(s1yr_s - s1yr_b),
+        f'<span style="{GOLD_CELL}">{fmt_lev(lev_1yr)}</span>'],
     ['3 Year (Ann.)',
-        fmt_pct(s3yr_s),
-        fmt_pct(s3yr_b),
-        fmt_pct(s3yr_s - s3yr_b)],
+        fmt_pct(s3yr_s), fmt_pct(s3yr_b), fmt_pct(s3yr_s - s3yr_b),
+        f'<span style="{GOLD_CELL}">{fmt_lev(lev_3yr)}</span>'],
     ['5 Year (Ann.)',
-        fmt_pct(s5yr_s),
-        fmt_pct(s5yr_b),
-        fmt_pct(s5yr_s - s5yr_b)],
+        fmt_pct(s5yr_s), fmt_pct(s5yr_b), fmt_pct(s5yr_s - s5yr_b),
+        f'<span style="{GOLD_CELL}">{fmt_lev(lev_5yr)}</span>'],
     ['Cumulative Since Feb. 2015',
         fmt_pct(metrics['strat']['all']),
         fmt_pct(metrics['bench']['all']),
-        fmt_pct(metrics['strat']['all'] - metrics['bench']['all'])],
+        fmt_pct(metrics['strat']['all'] - metrics['bench']['all']),
+        f'<span style="{GOLD_CELL}">{fmt_lev(lev_all)}</span>'],
     ['Ann. Return Since Feb. 2015',
         fmt_pct(metrics['strat']['ann']),
         fmt_pct(metrics['bench']['ann']),
-        fmt_pct(metrics['strat']['ann'] - metrics['bench']['ann'])],
+        fmt_pct(metrics['strat']['ann'] - metrics['bench']['ann']),
+        f'<span style="{GOLD_CELL}">{fmt_lev(lev_ann)}</span>'],
     ['Max Drawdown',
         fmt_pct(metrics['strat']['mdd']),
         fmt_pct(metrics['bench']['mdd']),
-        '—'],
+        '—',
+        f'<span style="{GOLD_CELL}">{fmt_lev(lev_mdd)}</span>'],
 ]
 returns_table = html_table(ret_headers, ret_rows)
 
 # Annual table
-ann_headers = ['Year', 'Strategy', 'SPY', 'Alpha']
-ann_rows = [[int(r['Year']), fmt_pct(r['Strategy']), fmt_pct(r['SPY']), fmt_pct(r['Alpha'])]
-            for _, r in annual_df.iterrows()]
+ann_headers = ['Year', 'Strategy (QQQ)', 'SPY', 'Alpha',
+               f'<span style="{GOLD_HEADER};padding:3px 8px;border-radius:4px">⚡ Leveraged</span>']
+ann_rows = []
+for _, r in annual_df.iterrows():
+    yr_key  = int(r['Year'])
+    lev_ret = lev_annual_df.loc[yr_key, 'Leveraged'] if yr_key in lev_annual_df.index else None
+    lev_cell = f'<span style="{GOLD_CELL}">{fmt_lev(lev_ret)}</span>' if lev_ret is not None else '—'
+    ann_rows.append([
+        yr_key,
+        fmt_pct(r['Strategy']),
+        fmt_pct(r['SPY']),
+        fmt_pct(r['Alpha']),
+        lev_cell,
+    ])
 annual_table = html_table(ann_headers, ann_rows)
 
 # Build sector & stock tables for each timeframe — embedded as JSON for JS dropdown
@@ -1556,6 +1678,92 @@ def build_table_data(returns_dict):
     for label, rows in returns_dict.items():
         out[label] = [{'rank': i+1, 'name': r[0], 'pct': r[1]} for i, r in enumerate(rows)]
     return _json.dumps(out)
+
+# ── Leveraged Strategy Chart ──────────────────────────────────────────────────
+lev_dates = [d.strftime('%Y-%m-%d') for d in lev_results.index]
+lev_pv    = lev_results['Portfolio_Value'].tolist()
+lev_bv    = lev_results['Benchmark_Value'].tolist()
+lev_exp   = lev_results['Exposure_Pct'].tolist()
+ 
+lev_yrange = [min(min(lev_pv), min(lev_bv)) * 0.93,
+              max(max(lev_pv), max(lev_bv)) * 1.07]
+ 
+fig3 = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.7, 0.3],
+    vertical_spacing=0.06)
+ 
+fig3.add_trace(go.Scatter(x=lev_dates, y=lev_pv,
+    mode='lines', name='Leveraged Strategy (TQQQ)',
+    line=dict(width=2, color='#fbbf24'),
+    hovertemplate='%{x}<br>$%{y:,.0f}<extra></extra>'), row=1, col=1)
+ 
+fig3.add_trace(go.Scatter(x=lev_dates, y=lev_bv,
+    mode='lines', name='SPY B&H',
+    line=dict(width=2, color='#fb923c', dash='dash'),
+    hovertemplate='%{x}<br>$%{y:,.0f}<extra></extra>'), row=1, col=1)
+ 
+# Buy markers on leveraged chart
+lev_buy_dates = [d for d, _ in buy_signals if d in lev_results.index]
+if lev_buy_dates:
+    fig3.add_trace(go.Scatter(
+        x=[d.strftime('%Y-%m-%d') for d in lev_buy_dates],
+        y=[lev_results.loc[d, 'Portfolio_Value'] for d in lev_buy_dates],
+        mode='markers', name='Buy',
+        marker=dict(color='#4ade80', size=10, symbol='triangle-up',
+                    line=dict(color='darkgreen', width=1)),
+        hovertemplate='BUY<br>%{x}<extra></extra>'), row=1, col=1)
+ 
+# Reduce markers on leveraged chart
+lev_red_dates = [d for d, _ in reduction_signals if d in lev_results.index]
+if lev_red_dates:
+    fig3.add_trace(go.Scatter(
+        x=[d.strftime('%Y-%m-%d') for d in lev_red_dates],
+        y=[lev_results.loc[d, 'Portfolio_Value'] for d in lev_red_dates],
+        mode='markers', name='Reduce',
+        marker=dict(color='#f87171', size=10, symbol='triangle-down',
+                    line=dict(color='darkred', width=1)),
+        hovertemplate='REDUCE<br>%{x}<extra></extra>'), row=1, col=1)
+ 
+fig3.add_trace(go.Scatter(x=lev_dates, y=lev_exp,
+    mode='lines', name='Exposure %',
+    line=dict(width=1.5, color='#fbbf24'),
+    fill='tozeroy', fillcolor='rgba(251,191,36,0.12)',
+    hovertemplate='%{x}<br>%{y:.0f}%<extra></extra>'), row=2, col=1)
+ 
+def yr_str_lev(ts, te, s1, s2):
+    ts_s = pd.Timestamp(ts).strftime('%Y-%m-%d')
+    te_s = pd.Timestamp(te).strftime('%Y-%m-%d')
+    sub1 = s1.loc[ts_s:te_s]; sub2 = s2.loc[ts_s:te_s]
+    combined = pd.concat([sub1, sub2]).dropna()
+    if combined.empty: combined = pd.concat([s1, s2]).dropna()
+    return [float(combined.min()) * 0.93, float(combined.max()) * 1.07]
+ 
+lev_pv_series = lev_results['Portfolio_Value']
+lev_bv_series = lev_results['Benchmark_Value']
+ 
+buttons3 = [dict(label=lbl, method='relayout',
+    args=[{'xaxis.range': [pd.Timestamp(ts).strftime('%Y-%m-%d'),
+                           pd.Timestamp(te).strftime('%Y-%m-%d')],
+           'yaxis.range': yr_str_lev(ts, te, lev_pv_series, lev_bv_series)}])
+    for lbl, ts, te in timeframes]
+ 
+fig3.update_layout(
+    paper_bgcolor='#0f172a', plot_bgcolor='#1e293b', font=dict(color='#e2e8f0'),
+    margin=dict(l=55, r=10, t=80, b=20), height=480, autosize=True,
+    legend=dict(orientation='h', y=1.0, x=0.0, xanchor='left',
+                yanchor='bottom', font=dict(size=11), bgcolor='rgba(0,0,0,0)'),
+    hovermode='x unified',
+    updatemenus=[dict(type='dropdown', direction='down',
+        x=1.0, y=1.08, xanchor='right', yanchor='top',
+        buttons=buttons3, bgcolor='#334155', bordercolor='#fbbf24',
+        font=dict(color='white'), showactive=True)]
+)
+fig3.update_xaxes(type='date', row=1, col=1)
+fig3.update_xaxes(type='date', row=2, col=1)
+fig3.update_yaxes(title_text='Portfolio Value ($)', gridcolor='#334155',
+    range=lev_yrange, row=1, col=1)
+fig3.update_yaxes(title_text='Exposure %', range=[0, 110],
+    gridcolor='#334155', row=2, col=1)
+chart3_html = plot(fig3, output_type='div', include_plotlyjs=False)
 
 sector_json = build_table_data(sector_returns_all)
 stock_json  = build_table_data(stock_returns_all)
@@ -2026,6 +2234,16 @@ html = f"""<!DOCTYPE html>
   <div class="section">
     <h2>Portfolio Value vs SPY Benchmark</h2>
     <div class="chart-wrap">{chart2_html}</div>
+  </div>
+
+  <!-- CHART 3 — LEVERAGED -->
+  <div class="section" style="border-color:#92400e">
+    <h2 style="color:#fbbf24">⚡ Leveraged Strategy (TQQQ) vs SPY Benchmark</h2>
+    <p style="font-size:0.8rem;color:#64748b;margin-bottom:16px;margin-top:-10px">
+      Same signals as the base strategy. Holding vehicle: TQQQ (3x leveraged Nasdaq-100).
+      Starting capital $1,000,000 — February 1, 2015.
+    </p>
+    <div class="chart-wrap">{chart3_html}</div>
   </div>
 
   <!-- MARKET DATA -->
