@@ -1617,8 +1617,8 @@ s3yr_b = ann_period_return(bench_v, 756)
 s5yr_s = ann_period_return(strat_v, 1260)
 s5yr_b = ann_period_return(bench_v, 1260)
 
-ret_headers = ['Period', 'Strategy (QQQ)', 'SPY B&H', 'Alpha',
-               f'<span style="{GOLD_HEADER};padding:3px 8px;border-radius:4px">⚡ Leveraged (TQQQ)</span>']
+ret_headers = ['Period', 'Strategy', 'SPY', 'Alpha',
+               f'<span style="{GOLD_HEADER};padding:3px 8px;border-radius:4px">⚡ Leveraged Strategy</span>']
 ret_rows = [
     ['YTD',
         fmt_pct(metrics['strat']['ytd']),
@@ -1653,8 +1653,8 @@ ret_rows = [
 returns_table = html_table(ret_headers, ret_rows)
 
 # Annual table
-ann_headers = ['Year', 'Strategy (QQQ)', 'SPY', 'Alpha',
-               f'<span style="{GOLD_HEADER};padding:3px 8px;border-radius:4px">⚡ Leveraged</span>']
+ann_headers = ['Year', 'Strategy', 'SPY', 'Alpha',
+               f'<span style="{GOLD_HEADER};padding:3px 8px;border-radius:4px">⚡ Leveraged Strategy</span>']
 ann_rows = []
 for _, r in annual_df.iterrows():
     yr_key  = int(r['Year'])
@@ -2232,13 +2232,13 @@ html = f"""<!DOCTYPE html>
 
   <!-- CHART 2 -->
   <div class="section">
-    <h2>Portfolio Value vs SPY Benchmark</h2>
+    <h2>Portfolio Value vs SPY</h2>
     <div class="chart-wrap">{chart2_html}</div>
   </div>
 
   <!-- CHART 3 — LEVERAGED -->
   <div class="section" style="border-color:#92400e">
-    <h2 style="color:#fbbf24">⚡ Leveraged Strategy (TQQQ) vs SPY Benchmark</h2>
+    <h2 style="color:#fbbf24">⚡ Leveraged Strategy (TQQQ) vs SPY</h2>
     <p style="font-size:0.8rem;color:#64748b;margin-bottom:16px;margin-top:-10px">
       Same signals as the base strategy. Holding vehicle: TQQQ (3x leveraged Nasdaq-100).
       Starting capital $1,000,000 — February 1, 2015.
