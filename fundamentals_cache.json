@@ -84,8 +84,8 @@
     "net_margin": 25.53
   },
   "AVGO": {
-    "rev_growth": 47.9,
-    "net_margin": 38.85
+    "rev_growth": 85.5,
+    "net_margin": 42.94
   },
   "CDNS": {
     "rev_growth": 24.2,
@@ -296,8 +296,8 @@
     "net_margin": 49.01
   },
   "PANW": {
-    "rev_growth": 31.1,
-    "net_margin": 7.95
+    "rev_growth": 34.4,
+    "net_margin": 2.67
   },
   "PAYX": {
     "rev_growth": 12.5,
@@ -407,5 +407,5 @@
     "rev_growth": -5.1,
     "net_margin": 15.28
   },
-  "_cached_on": "2026-08-31T23:52:44.739725"
+  "_cached_on": "2026-09-08T23:02:09.263817"
 }
