@@ -2132,7 +2132,7 @@ security_selection_html = f"""
 </p>
 """
 
- ── Market Breadth HTML ───────────────────────────────────────────────────────
+# ── Market Breadth HTML ───────────────────────────────────────────────────────
 def build_breadth_html(bd):
     if bd is None:
         return '<p class="muted">Market breadth data unavailable.</p>'
