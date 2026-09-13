@@ -1324,6 +1324,169 @@ print("Calculating Fear & Greed indicator...")
 fg_data = calc_fear_greed()
 
 # =============================================================================
+# MARKET BREADTH
+# Calculates % of LARGE_CAPS stocks trading above their 200-day and 100-day EMA
+# Uses the existing stock_data DataFrame already fetched for the top movers section
+# =============================================================================
+ 
+def calc_market_breadth(price_data, tickers):
+    """
+    Calculate % of stocks above their 100-day and 200-day EMA.
+    Uses the existing stock_data DataFrame (370 days of history).
+    Returns dict with breadth readings and trend vs 1 month ago.
+    """
+    above_200 = []
+    above_100 = []
+    above_200_1m = []   # same calculation but 1 month ago (20 trading days back)
+    above_100_1m = []
+ 
+    for ticker in tickers:
+        if ticker not in price_data.columns:
+            continue
+        prices = price_data[ticker].dropna()
+        if len(prices) < 200:
+            continue
+ 
+        current_price = prices.iloc[-1]
+        price_1m_ago  = prices.iloc[-21] if len(prices) >= 21 else None
+ 
+        # Current EMAs
+        ema200 = float(prices.ewm(span=200, adjust=False).mean().iloc[-1])
+        ema100 = float(prices.ewm(span=100, adjust=False).mean().iloc[-1])
+ 
+        above_200.append(1 if current_price > ema200 else 0)
+        above_100.append(1 if current_price > ema100 else 0)
+ 
+        # EMAs 1 month ago (using prices up to 20 days ago)
+        if price_1m_ago is not None:
+            prices_1m    = prices.iloc[:-20]
+            if len(prices_1m) >= 200:
+                ema200_1m = float(prices_1m.ewm(span=200, adjust=False).mean().iloc[-1])
+                ema100_1m = float(prices_1m.ewm(span=100, adjust=False).mean().iloc[-1])
+                price_then = prices_1m.iloc[-1]
+                above_200_1m.append(1 if price_then > ema200_1m else 0)
+                above_100_1m.append(1 if price_then > ema100_1m else 0)
+ 
+    if not above_200:
+        return None
+ 
+    pct_200     = round(sum(above_200) / len(above_200) * 100, 1)
+    pct_100     = round(sum(above_100) / len(above_100) * 100, 1)
+    pct_200_1m  = round(sum(above_200_1m) / len(above_200_1m) * 100, 1) if above_200_1m else None
+    pct_100_1m  = round(sum(above_100_1m) / len(above_100_1m) * 100, 1) if above_100_1m else None
+ 
+    def breadth_label(pct):
+        if pct >= 80:   return 'Very Bullish',  '#4ade80'
+        elif pct >= 60: return 'Bullish',        '#86efac'
+        elif pct >= 40: return 'Neutral',        '#fbbf24'
+        elif pct >= 20: return 'Bearish',        '#f87171'
+        else:           return 'Very Bearish',   '#dc2626'
+ 
+    def trend_arrow(current, prior):
+        if prior is None: return ''
+        diff = current - prior
+        if diff > 2:    return f'▲ +{diff:.1f}%'
+        elif diff < -2: return f'▼ {diff:.1f}%'
+        else:           return f'→ {diff:+.1f}%'
+ 
+    lbl_200, col_200 = breadth_label(pct_200)
+    lbl_100, col_100 = breadth_label(pct_100)
+ 
+    return {
+        'pct_200':    pct_200,
+        'pct_100':    pct_100,
+        'label_200':  lbl_200,
+        'label_100':  lbl_100,
+        'color_200':  col_200,
+        'color_100':  col_100,
+        'trend_200':  trend_arrow(pct_200, pct_200_1m),
+        'trend_100':  trend_arrow(pct_100, pct_100_1m),
+        'universe':   len(above_200),
+        'pct_200_1m': pct_200_1m,
+        'pct_100_1m': pct_100_1m,
+    }
+ 
+ 
+print("Calculating market breadth...")
+breadth_data = calc_market_breadth(stock_data, LARGE_CAPS)
+
+# =============================================================================
+# SIGNAL HISTORY LOG
+# Shows every Buy and Reduce signal since Feb 2015 with SPX level and
+# subsequent return into the next signal
+# =============================================================================
+ 
+def build_signal_history(signals_df, spx_price):
+    """
+    Build a complete signal history table showing every Buy/Reduce signal,
+    the SPX level at signal, and the return to the next signal.
+    """
+    # Pull all Buy and Reduce rows in chronological order
+    sig_rows = signals_df[signals_df['Signal'].isin(['Buy', 'Reduce'])].copy()
+    sig_rows = sig_rows[sig_rows.index >= pd.Timestamp(BACKTEST_START)]
+ 
+    records = []
+    sig_list = list(sig_rows.iterrows())
+ 
+    for i, (date, row) in enumerate(sig_list):
+        signal    = row['Signal']
+        condition = row['Condition'] or ''
+ 
+        # SPX level on signal date
+        try:
+            spx_idx = spx_price.copy()
+            if hasattr(spx_idx.index, 'tz') and spx_idx.index.tz is not None:
+                spx_idx.index = spx_idx.index.tz_localize(None)
+            spx_idx.index = pd.to_datetime([str(d)[:10] for d in spx_idx.index])
+            spx_val = float(spx_idx.asof(pd.Timestamp(str(date)[:10])))
+        except Exception:
+            spx_val = None
+ 
+        # SPX level at next signal
+        if i + 1 < len(sig_list):
+            next_date = sig_list[i + 1][0]
+            try:
+                spx_next = float(spx_idx.asof(pd.Timestamp(str(next_date)[:10])))
+            except Exception:
+                spx_next = None
+ 
+            # Return from this signal to next signal
+            if spx_val and spx_next and spx_val > 0:
+                spx_return = round((spx_next / spx_val - 1) * 100, 2)
+            else:
+                spx_return = None
+ 
+            days_held = (next_date - date).days
+        else:
+            # Last signal — measure to today
+            next_date  = None
+            try:
+                spx_next = float(spx_idx.iloc[-1])
+            except Exception:
+                spx_next = None
+            if spx_val and spx_next and spx_val > 0:
+                spx_return = round((spx_next / spx_val - 1) * 100, 2)
+            else:
+                spx_return = None
+            days_held = (pd.Timestamp(datetime.now().strftime('%Y-%m-%d')) - date).days
+ 
+        records.append({
+            'Date':          date.strftime('%b %d, %Y'),
+            'Signal':        signal,
+            'Condition':     condition.replace('_', ' '),
+            'SPX_at_Signal': f'{spx_val:,.0f}' if spx_val else 'N/A',
+            'Next_Signal':   next_date.strftime('%b %d, %Y') if next_date else 'Present',
+            'SPX_Return':    spx_return,
+            'Days_Held':     days_held,
+        })
+ 
+    return records
+ 
+ 
+print("Building signal history log...")
+signal_history = build_signal_history(signals_df, spx_price)
+
+# =============================================================================
 # NEWS via NewsAPI
 # =============================================================================
 
@@ -1969,6 +2132,103 @@ security_selection_html = f"""
 </p>
 """
 
+ ── Market Breadth HTML ───────────────────────────────────────────────────────
+def build_breadth_html(bd):
+    if bd is None:
+        return '<p class="muted">Market breadth data unavailable.</p>'
+ 
+    def gauge_bar(pct, color):
+        return (f'<div style="display:flex;align-items:center;gap:10px">'
+                f'<div style="flex:1;height:10px;border-radius:5px;background:#1e293b">'
+                f'<div style="width:{pct}%;height:100%;border-radius:5px;background:{color}"></div>'
+                f'</div>'
+                f'<span style="font-size:0.85rem;font-weight:700;color:{color};min-width:42px">{pct}%</span>'
+                f'</div>')
+ 
+    return f"""
+<table style="font-size:0.88rem">
+  <thead><tr>
+    <th>Indicator</th><th>Reading</th><th>Breadth Bar</th>
+    <th>vs 1 Month Ago</th><th>Signal</th>
+  </tr></thead>
+  <tbody>
+    <tr>
+      <td>% Above 200-day EMA</td>
+      <td style="font-weight:700;color:{bd['color_200']}">{bd['pct_200']}%</td>
+      <td style="min-width:180px">{gauge_bar(bd['pct_200'], bd['color_200'])}</td>
+      <td style="color:{'#4ade80' if '▲' in bd['trend_200'] else '#f87171' if '▼' in bd['trend_200'] else '#94a3b8'}">{bd['trend_200'] or 'N/A'}</td>
+      <td><span style="background:{bd['color_200']}22;color:{bd['color_200']};
+          padding:2px 10px;border-radius:12px;font-size:0.78rem;font-weight:700">
+          {bd['label_200']}</span></td>
+    </tr>
+    <tr>
+      <td>% Above 100-day EMA</td>
+      <td style="font-weight:700;color:{bd['color_100']}">{bd['pct_100']}%</td>
+      <td style="min-width:180px">{gauge_bar(bd['pct_100'], bd['color_100'])}</td>
+      <td style="color:{'#4ade80' if '▲' in bd['trend_100'] else '#f87171' if '▼' in bd['trend_100'] else '#94a3b8'}">{bd['trend_100'] or 'N/A'}</td>
+      <td><span style="background:{bd['color_100']}22;color:{bd['color_100']};
+          padding:2px 10px;border-radius:12px;font-size:0.78rem;font-weight:700">
+          {bd['label_100']}</span></td>
+    </tr>
+  </tbody>
+</table>
+<p class="muted" style="margin-top:10px">
+  Based on {bd['universe']} liquid large-cap stocks &bull;
+  Very Bullish &gt;80% &bull; Bullish 60–80% &bull;
+  Neutral 40–60% &bull; Bearish 20–40% &bull; Very Bearish &lt;20%
+</p>"""
+ 
+ 
+breadth_html = build_breadth_html(breadth_data)
+ 
+ 
+# ── Signal History Log HTML ───────────────────────────────────────────────────
+def build_signal_history_html(history):
+    if not history:
+        return '<p class="muted">No signals found.</p>'
+ 
+    rows_html = ''
+    for rec in reversed(history):   # most recent first
+        sig     = rec['Signal']
+        ret     = rec['SPX_Return']
+        sig_color  = '#4ade80' if sig == 'Buy' else '#f87171'
+        sig_bg     = 'rgba(74,222,128,0.08)' if sig == 'Buy' else 'rgba(248,113,113,0.08)'
+        ret_color  = '#4ade80' if ret and ret >= 0 else '#f87171'
+        ret_str    = f'{ret:+.2f}%' if ret is not None else 'Pending'
+ 
+        rows_html += (
+            f'<tr style="background:{sig_bg}">'
+            f'<td style="font-weight:600;color:#e2e8f0">{rec["Date"]}</td>'
+            f'<td><span style="background:{sig_color}22;color:{sig_color};'
+            f'padding:2px 10px;border-radius:12px;font-weight:700;font-size:0.78rem">'
+            f'{sig}</span></td>'
+            f'<td style="color:#94a3b8;font-size:0.82rem">{rec["Condition"]}</td>'
+            f'<td style="color:#e2e8f0">{rec["SPX_at_Signal"]}</td>'
+            f'<td style="color:#64748b">{rec["Next_Signal"]}</td>'
+            f'<td style="color:{ret_color};font-weight:700">{ret_str}</td>'
+            f'<td style="color:#64748b">{rec["Days_Held"]}d</td>'
+            f'</tr>'
+        )
+ 
+    return f"""
+<div style="overflow-x:auto">
+<table>
+  <thead><tr>
+    <th>Signal Date</th><th>Signal</th><th>Condition</th>
+    <th>SPX at Signal</th><th>Next Signal</th>
+    <th>SPX Return</th><th>Days Held</th>
+  </tr></thead>
+  <tbody>{rows_html}</tbody>
+</table>
+</div>
+<p class="muted" style="margin-top:10px">
+  SPX Return = S&P 500 index return from signal date to next signal date (or present).
+  Most recent signals shown first.
+</p>"""
+ 
+ 
+signal_history_html = build_signal_history_html(signal_history)
+
 geo_html   = news_list(geo_news,   'Add NEWS_API_KEY as a GitHub Actions secret to enable live news headlines. Sign up free at newsapi.org/register')
 macro_html = news_list(macro_news, 'Add NEWS_API_KEY as a GitHub Actions secret to enable live news headlines. Sign up free at newsapi.org/register')
 
@@ -2193,6 +2453,20 @@ html = f"""<!DOCTYPE html>
     <div style="font-size:0.78rem;color:#64748b;margin-top:4px">{today_date}</div>
   </div>
 
+  <!-- Annualized Return -->
+  <div class="banner-item">
+    <div class="label">Ann. Return vs SPY</div>
+    <div style="font-size:1.1rem;font-weight:700;margin-top:6px;color:{'#4ade80' if metrics['strat']['ann'] >= metrics['bench']['ann'] else '#f87171'}">{'+' if metrics['strat']['ann'] >= 0 else ''}{metrics['strat']['ann']:.2f}%</div>
+    <div style="font-size:0.78rem;color:#64748b;margin-top:4px">SPY: {'+' if metrics['bench']['ann'] >= 0 else ''}{metrics['bench']['ann']:.2f}%</div>
+  </div>
+
+  <!-- Max Drawdown -->
+  <div class="banner-item">
+    <div class="label">Max Drawdown vs SPY</div>
+    <div style="font-size:1.1rem;font-weight:700;margin-top:6px;color:#f87171">{metrics['strat']['mdd']:.2f}%</div>
+    <div style="font-size:0.78rem;color:#64748b;margin-top:4px">SPY: {metrics['bench']['mdd']:.2f}%</div>
+  </div>
+
 </div>
 
 <div class="main">
@@ -2265,6 +2539,12 @@ html = f"""<!DOCTYPE html>
       {macro_table}
     </div>
   </div>
+
+  <!-- MARKET BREADTH -->
+  <div class="section">
+    <h2>Market Breadth</h2>
+    {breadth_html}
+  </div>
   
   <!-- FEAR & GREED -->
   <div class="section">
@@ -2272,7 +2552,7 @@ html = f"""<!DOCTYPE html>
     {fg_html}
   </div>
 
-  <!-- TOP 20 STOCKS -->
+  <!-- TOP 20 STOCKS - hidden, code preserved
   <div class="section">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;padding-bottom:10px;border-bottom:1px solid #334155">
       <h2 style="margin:0;border:none;padding:0">Top 20 Stock Performers</h2>
@@ -2285,6 +2565,7 @@ html = f"""<!DOCTYPE html>
       <tbody id="stock-tbody"></tbody>
     </table>
   </div>
+  END TOP 20 Stocks -->
 
 <!-- SECURITY SELECTION -->
   <div class="section">
@@ -2302,6 +2583,12 @@ html = f"""<!DOCTYPE html>
       <h2>📊 Macro &amp; Economic News</h2>
       {macro_html}
     </div>
+  </div>
+
+  <!-- SIGNAL HISTORY LOG -->
+  <div class="section">
+    <h2>Signal History Log</h2>
+    {signal_history_html}
   </div>
 
 </div>
