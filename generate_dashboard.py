@@ -1470,12 +1470,26 @@ def build_signal_history(signals_df, spx_price):
                 spx_return = None
             days_held = (pd.Timestamp(datetime.now().strftime('%Y-%m-%d')) - date).days
  
+        # Portfolio return between signals
+        try:
+            port_start = bt_results.loc[date, 'Portfolio_Value'] if date in bt_results.index else None
+            if next_date is not None:
+                port_end = bt_results.loc[next_date, 'Portfolio_Value'] if next_date in bt_results.index else None
+            else:
+                port_end = bt_results['Portfolio_Value'].iloc[-1]
+            if port_start and port_end and port_start > 0:
+                port_return = round((port_end / port_start - 1) * 100, 2)
+            else:
+                port_return = None
+        except Exception:
+            port_return = None
+        
         records.append({
             'Date':          date.strftime('%b %d, %Y'),
             'Signal':        signal,
             'Condition':     condition.replace('_', ' '),
-            'SPX_at_Signal': f'{spx_val:,.0f}' if spx_val else 'N/A',
             'Next_Signal':   next_date.strftime('%b %d, %Y') if next_date else 'Present',
+            'Port_Return':   port_return,
             'SPX_Return':    spx_return,
             'Days_Held':     days_held,
         })
@@ -2196,6 +2210,10 @@ def build_signal_history_html(history):
         ret_color  = '#4ade80' if ret and ret >= 0 else '#f87171'
         ret_str    = f'{ret:+.2f}%' if ret is not None else 'Pending'
  
+        port_ret     = rec['Port_Return']
+        port_color   = '#4ade80' if port_ret and port_ret >= 0 else '#f87171'
+        port_str     = f'{port_ret:+.2f}%' if port_ret is not None else 'Pending'
+
         rows_html += (
             f'<tr style="background:{sig_bg}">'
             f'<td style="font-weight:600;color:#e2e8f0">{rec["Date"]}</td>'
@@ -2203,9 +2221,9 @@ def build_signal_history_html(history):
             f'padding:2px 10px;border-radius:12px;font-weight:700;font-size:0.78rem">'
             f'{sig}</span></td>'
             f'<td style="color:#94a3b8;font-size:0.82rem">{rec["Condition"]}</td>'
-            f'<td style="color:#e2e8f0">{rec["SPX_at_Signal"]}</td>'
             f'<td style="color:#64748b">{rec["Next_Signal"]}</td>'
             f'<td style="color:{ret_color};font-weight:700">{ret_str}</td>'
+            f'<td style="color:{port_color};font-weight:700">{port_str}</td>'
             f'<td style="color:#64748b">{rec["Days_Held"]}d</td>'
             f'</tr>'
         )
@@ -2215,8 +2233,8 @@ def build_signal_history_html(history):
 <table>
   <thead><tr>
     <th>Signal Date</th><th>Signal</th><th>Condition</th>
-    <th>SPX at Signal</th><th>Next Signal</th>
-    <th>SPX Return</th><th>Days Held</th>
+    <th>Next Signal</th><th>SPX Return</th>
+    <th>Portfolio Return</th><th>Days Held</th>
   </tr></thead>
   <tbody>{rows_html}</tbody>
 </table>
