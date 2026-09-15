@@ -626,6 +626,30 @@ def max_drawdown(series):
     roll_max = series.cummax()
     return round(((series - roll_max) / roll_max).min() * 100, 2)
 
+def calc_alpha_beta(port_series, bench_series):
+    """
+    Calculate Alpha and Beta vs benchmark using daily returns.
+    Beta  = covariance(port, bench) / variance(bench)
+    Alpha = annualized(port return) - Beta * annualized(bench return)
+    """
+    port_ret  = port_series.pct_change().dropna()
+    bench_ret = bench_series.pct_change().dropna()
+ 
+    # Align both series to same dates
+    port_ret, bench_ret = port_ret.align(bench_ret, join='inner')
+ 
+    if len(port_ret) < 20:
+        return None, None
+ 
+    beta  = port_ret.cov(bench_ret) / bench_ret.var()
+    alpha = (ann_return(port_series) - beta * ann_return(bench_series))
+ 
+    return round(alpha, 2), round(beta, 3)
+ 
+# Calculate for both strategies
+strat_alpha, strat_beta = calc_alpha_beta(strat_v, bench_v)
+lev_alpha,   lev_beta   = calc_alpha_beta(lev_v,   bench_v)
+
 strat_v = bt_results['Portfolio_Value']
 bench_v = bt_results['Benchmark_Value']
 
@@ -1811,16 +1835,6 @@ ret_rows = [
     ['5 Year (Ann.)',
         fmt_pct(s5yr_s), fmt_pct(s5yr_b), fmt_pct(s5yr_s - s5yr_b),
         f'<span style="{GOLD_CELL}">{fmt_lev(lev_5yr)}</span>'],
-    ['Cumulative Since Feb. 2015',
-        fmt_pct(metrics['strat']['all']),
-        fmt_pct(metrics['bench']['all']),
-        fmt_pct(metrics['strat']['all'] - metrics['bench']['all']),
-        f'<span style="{GOLD_CELL}">{fmt_lev(lev_all)}</span>'],
-    ['Ann. Return Since Feb. 2015',
-        fmt_pct(metrics['strat']['ann']),
-        fmt_pct(metrics['bench']['ann']),
-        fmt_pct(metrics['strat']['ann'] - metrics['bench']['ann']),
-        f'<span style="{GOLD_CELL}">{fmt_lev(lev_ann)}</span>'],
     ['Max Drawdown',
         fmt_pct(metrics['strat']['mdd']),
         fmt_pct(metrics['bench']['mdd']),
@@ -2352,6 +2366,8 @@ html = f"""<!DOCTYPE html>
 
   /* Tables */
   table {{ width: 100%; border-collapse: collapse; font-size: 0.88rem; }}
+  #returns-table table {{ font-size: 1.05rem; }}
+  #returns-table td, #returns-table th {{ padding: 13px 14px; }}
   #sector-table {{ font-size: 1.05rem; }}
   #sector-table td, #sector-table th {{ padding: 13px 14px; }}
   th {{ background: #0f172a; color: #64748b; text-transform: uppercase;
@@ -2489,24 +2505,98 @@ html = f"""<!DOCTYPE html>
 
 <div class="main">
 
-  <!-- PERFORMANCE CARDS -->
+  <!-- PERFORMANCE OVERVIEW TABLE -->
   <div class="section">
     <h2>Performance Overview</h2>
-    <div class="cards">
-      {metric_card('Strategy YTD', fmt_pct(metrics['strat']['ytd']))}
-      {metric_card('Strategy 1-Year', fmt_pct(metrics['strat']['1yr']))}
-      {metric_card('Strategy 5-Year', fmt_pct(metrics['strat']['5yr']))}
-      {metric_card('Strategy All-Time', fmt_pct(metrics['strat']['all']), 'Since Feb 2015')}
-      {metric_card('Ann. Return', fmt_pct(metrics['strat']['ann']))}
-      {metric_card('Max Drawdown', fmt_pct(metrics['strat']['mdd']))}
-      {metric_card('SPY YTD', fmt_pct(metrics['bench']['ytd']))}
-      {metric_card('SPY All-Time', fmt_pct(metrics['bench']['all']), 'Since Feb 2015')}
+    <div class="cards" style="grid-template-columns:repeat(6,1fr)">
+ 
+      <!-- Row headers -->
+      <div class="card" style="background:transparent;border-color:transparent"></div>
+      <div class="card" style="background:#0f172a;border-color:#334155;text-align:center">
+        <div class="card-label">Ann. Return<br>Since Feb 2015</div>
+      </div>
+      <div class="card" style="background:#0f172a;border-color:#334155;text-align:center">
+        <div class="card-label">Cumulative<br>Since Feb 2015</div>
+      </div>
+      <div class="card" style="background:#0f172a;border-color:#334155;text-align:center">
+        <div class="card-label">Max<br>Drawdown</div>
+      </div>
+      <div class="card" style="background:#0f172a;border-color:#334155;text-align:center">
+        <div class="card-label">Alpha<br>vs SPY</div>
+      </div>
+      <div class="card" style="background:#0f172a;border-color:#334155;text-align:center">
+        <div class="card-label">Beta<br>vs SPY</div>
+      </div>
+ 
+      <!-- Strategy row -->
+      <div class="card" style="background:#0f172a;border-color:#334155">
+        <div class="card-label">Strategy</div>
+        <div class="card-value" style="font-size:0.95rem;color:#60a5fa">QQQ</div>
+      </div>
+      <div class="card" style="background:#0f172a;border-color:#334155;text-align:center">
+        <div class="card-value">{fmt_pct(metrics['strat']['ann'])}</div>
+      </div>
+      <div class="card" style="background:#0f172a;border-color:#334155;text-align:center">
+        <div class="card-value">{fmt_pct(metrics['strat']['all'])}</div>
+      </div>
+      <div class="card" style="background:#0f172a;border-color:#334155;text-align:center">
+        <div class="card-value">{fmt_pct(metrics['strat']['mdd'])}</div>
+      </div>
+      <div class="card" style="background:#0f172a;border-color:#334155;text-align:center">
+        <div class="card-value">{fmt_pct(strat_alpha) if strat_alpha is not None else 'N/A'}</div>
+      </div>
+      <div class="card" style="background:#0f172a;border-color:#334155;text-align:center">
+        <div class="card-value" style="color:#e2e8f0">{f'{strat_beta:.3f}' if strat_beta is not None else 'N/A'}</div>
+      </div>
+ 
+      <!-- Leveraged Strategy row -->
+      <div class="card" style="background:#0f172a;border-color:#92400e">
+        <div class="card-label">Leveraged Strategy</div>
+        <div class="card-value" style="font-size:0.95rem;color:#fbbf24">TQQQ</div>
+      </div>
+      <div class="card" style="background:#0f172a;border-color:#92400e;text-align:center">
+        <div class="card-value">{fmt_pct(lev_ann)}</div>
+      </div>
+      <div class="card" style="background:#0f172a;border-color:#92400e;text-align:center">
+        <div class="card-value">{fmt_pct(lev_all)}</div>
+      </div>
+      <div class="card" style="background:#0f172a;border-color:#92400e;text-align:center">
+        <div class="card-value">{fmt_pct(lev_mdd)}</div>
+      </div>
+      <div class="card" style="background:#0f172a;border-color:#92400e;text-align:center">
+        <div class="card-value">{fmt_pct(lev_alpha) if lev_alpha is not None else 'N/A'}</div>
+      </div>
+      <div class="card" style="background:#0f172a;border-color:#92400e;text-align:center">
+        <div class="card-value" style="color:#fbbf24">{f'{lev_beta:.3f}' if lev_beta is not None else 'N/A'}</div>
+      </div>
+ 
+      <!-- SPY row -->
+      <div class="card" style="background:#0f172a;border-color:#334155">
+        <div class="card-label">Benchmark</div>
+        <div class="card-value" style="font-size:0.95rem;color:#fb923c">SPY</div>
+      </div>
+      <div class="card" style="background:#0f172a;border-color:#334155;text-align:center">
+        <div class="card-value">{fmt_pct(metrics['bench']['ann'])}</div>
+      </div>
+      <div class="card" style="background:#0f172a;border-color:#334155;text-align:center">
+        <div class="card-value">{fmt_pct(metrics['bench']['all'])}</div>
+      </div>
+      <div class="card" style="background:#0f172a;border-color:#334155;text-align:center">
+        <div class="card-value">{fmt_pct(metrics['bench']['mdd'])}</div>
+      </div>
+      <div class="card" style="background:#0f172a;border-color:#334155;text-align:center">
+        <div class="card-value" style="color:#94a3b8">—</div>
+      </div>
+      <div class="card" style="background:#0f172a;border-color:#334155;text-align:center">
+        <div class="card-value" style="color:#94a3b8">1.000</div>
+      </div>
+ 
     </div>
   </div>
 
   <!-- RETURNS TABLE -->
   <div class="two-col">
-    <div class="section">
+    <div class="section" id="returns-table">
       <h2>Trailing Returns vs SPY</h2>
       {returns_table}
     </div>
