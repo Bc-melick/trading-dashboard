@@ -1,7 +1,7 @@
 {
   "ADBE": {
-    "rev_growth": 12.7,
-    "net_margin": 28.69
+    "rev_growth": 12.9,
+    "net_margin": 28.05
   },
   "AMD": {
     "rev_growth": 50.1,
@@ -112,8 +112,8 @@
     "net_margin": 11.08
   },
   "CPRT": {
-    "rev_growth": 2.1,
-    "net_margin": 33.48
+    "rev_growth": 2.4,
+    "net_margin": 31.81
   },
   "CRWV": {
     "rev_growth": 112.5,
@@ -296,7 +296,7 @@
     "net_margin": 49.01
   },
   "PANW": {
-    "rev_growth": 34.4,
+    "rev_growth": 34.5,
     "net_margin": 2.67
   },
   "PAYX": {
@@ -407,5 +407,5 @@
     "rev_growth": -5.1,
     "net_margin": 15.28
   },
-  "_cached_on": "2026-09-08T23:02:09.263817"
+  "_cached_on": "2026-09-15T23:14:30.810088"
 }
