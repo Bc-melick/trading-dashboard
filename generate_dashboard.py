@@ -645,13 +645,13 @@ def calc_alpha_beta(port_series, bench_series):
     alpha = (ann_return(port_series) - beta * ann_return(bench_series))
  
     return round(alpha, 2), round(beta, 3)
- 
-# Calculate for both strategies
-strat_alpha, strat_beta = calc_alpha_beta(strat_v, bench_v)
-lev_alpha,   lev_beta   = calc_alpha_beta(lev_v,   bench_v)
 
 strat_v = bt_results['Portfolio_Value']
 bench_v = bt_results['Benchmark_Value']
+
+# Calculate for both strategies
+strat_alpha, strat_beta = calc_alpha_beta(strat_v, bench_v)
+lev_alpha,   lev_beta   = calc_alpha_beta(lev_v,   bench_v)
 
 # Trading days approximations
 metrics = {
@@ -1780,6 +1780,8 @@ else:
 
 # ── Leveraged trailing returns ────────────────────────────────────────────────
 lev_v    = lev_results['Portfolio_Value']
+strat_alpha, strat_beta = calc_alpha_beta(strat_v, bench_v)
+lev_alpha,   lev_beta   = calc_alpha_beta(lev_v,   bench_v)
 lev_ytd  = ytd_return(lev_v)
 lev_1yr  = ann_period_return(lev_v, 252)
 lev_3yr  = ann_period_return(lev_v, 756)
