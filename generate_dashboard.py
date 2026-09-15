@@ -142,6 +142,8 @@ for _df in [close_data, high_data, low_data]:
 blended_price = sum(close_data[t] * w for t, w in weights.items())
 blended_price.name = 'Blended_Price'
 print(f"Last date in blended price: {blended_price.index[-1]}")
+print(f"Last 5 dates in close_data:")
+print(close_data.tail())
 
 qqq_close = close_data['QQQ']
 qqq_high  = high_data['QQQ']
