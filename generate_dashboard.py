@@ -1509,15 +1509,30 @@ def build_signal_history(signals_df, spx_price):
                 port_return = None
         except Exception:
             port_return = None
-        
+
+        # Leveraged portfolio return between signals
+        try:
+            lev_start = lev_results.loc[date, 'Portfolio_Value'] if date in lev_results.index else None
+            if next_date is not None:
+                lev_end = lev_results.loc[next_date, 'Portfolio_Value'] if next_date in lev_results.index else None
+            else:
+                lev_end = lev_results['Portfolio_Value'].iloc[-1]
+            if lev_start and lev_end and lev_start > 0:
+                lev_port_return = round((lev_end / lev_start - 1) * 100, 2)
+            else:
+                lev_port_return = None
+        except Exception:
+            lev_port_return = None
+
         records.append({
-            'Date':          date.strftime('%b %d, %Y'),
-            'Signal':        signal,
-            'Condition':     condition.replace('_', ' '),
-            'Next_Signal':   next_date.strftime('%b %d, %Y') if next_date else 'Present',
-            'Port_Return':   port_return,
-            'SPX_Return':    spx_return,
-            'Days_Held':     days_held,
+            'Date':           date.strftime('%b %d, %Y'),
+            'Signal':         signal,
+            'Condition':      condition.replace('_', ' '),
+            'Next_Signal':    next_date.strftime('%b %d, %Y') if next_date else 'Present',
+            'SPX_Return':     spx_return,
+            'Port_Return':    port_return,
+            'Lev_Return':     lev_port_return,
+            'Days_Held':      days_held,
         })
  
     return records
@@ -2233,6 +2248,10 @@ def build_signal_history_html(history):
         port_color   = '#4ade80' if port_ret and port_ret >= 0 else '#f87171'
         port_str     = f'{port_ret:+.2f}%' if port_ret is not None else 'Pending'
 
+        lev_ret      = rec['Lev_Return']
+        lev_color    = '#4ade80' if lev_ret and lev_ret >= 0 else '#f87171'
+        lev_str      = f'{lev_ret:+.2f}%' if lev_ret is not None else 'Pending'
+
         rows_html += (
             f'<tr style="background:{sig_bg}">'
             f'<td style="font-weight:600;color:#e2e8f0">{rec["Date"]}</td>'
@@ -2243,6 +2262,7 @@ def build_signal_history_html(history):
             f'<td style="color:#64748b">{rec["Next_Signal"]}</td>'
             f'<td style="color:{ret_color};font-weight:700">{ret_str}</td>'
             f'<td style="color:{port_color};font-weight:700">{port_str}</td>'
+            f'<td style="color:{lev_color};font-weight:700;border-left:2px solid #92400e">{lev_str}</td>'
             f'<td style="color:#64748b">{rec["Days_Held"]}d</td>'
             f'</tr>'
         )
@@ -2253,7 +2273,9 @@ def build_signal_history_html(history):
   <thead><tr>
     <th>Signal Date</th><th>Signal</th><th>Condition</th>
     <th>Next Signal</th><th>SPX Return</th>
-    <th>Portfolio Return</th><th>Days Held</th>
+    <th>Portfolio Return</th>
+    <th style="border-left:2px solid #92400e;color:#fbbf24">⚡ Leveraged Return</th>
+    <th>Days Held</th>
   </tr></thead>
   <tbody>{rows_html}</tbody>
 </table>
