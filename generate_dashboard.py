@@ -1824,7 +1824,7 @@ s5yr_s = ann_period_return(strat_v, 1260)
 s5yr_b = ann_period_return(bench_v, 1260)
 
 ret_headers = ['Period', 'Strategy', 'SPY', 'Alpha',
-               f'<span style="{GOLD_HEADER};padding:3px 8px;border-radius:4px">⚡ Leveraged Strategy</span>']
+               f'<span style="{GOLD_HEADER};padding:3px 8px;border-radius:4px;white-space:nowrap">⚡ Leveraged Strategy</span>']
 ret_rows = [
     ['YTD',
         fmt_pct(metrics['strat']['ytd']),
@@ -2523,16 +2523,15 @@ html = f"""<!DOCTYPE html>
         <div class="card-label">Max<br>Drawdown</div>
       </div>
       <div class="card" style="background:#0f172a;border-color:#334155;text-align:center">
-        <div class="card-label">Alpha<br>vs SPY</div>
+        <div class="card-label">Alpha</div>
       </div>
       <div class="card" style="background:#0f172a;border-color:#334155;text-align:center">
-        <div class="card-label">Beta<br>vs SPY</div>
+        <div class="card-label">Beta</div>
       </div>
  
       <!-- Strategy row -->
       <div class="card" style="background:#0f172a;border-color:#334155">
         <div class="card-label">Strategy</div>
-        <div class="card-value" style="font-size:0.95rem;color:#60a5fa">QQQ</div>
       </div>
       <div class="card" style="background:#0f172a;border-color:#334155;text-align:center">
         <div class="card-value">{fmt_pct(metrics['strat']['ann'])}</div>
@@ -2544,7 +2543,7 @@ html = f"""<!DOCTYPE html>
         <div class="card-value">{fmt_pct(metrics['strat']['mdd'])}</div>
       </div>
       <div class="card" style="background:#0f172a;border-color:#334155;text-align:center">
-        <div class="card-value">{fmt_pct(strat_alpha) if strat_alpha is not None else 'N/A'}</div>
+        <div class="card-value">{f'{strat_alpha:+.2f}' if strat_alpha is not None else 'N/A'}</div>
       </div>
       <div class="card" style="background:#0f172a;border-color:#334155;text-align:center">
         <div class="card-value" style="color:#e2e8f0">{f'{strat_beta:.3f}' if strat_beta is not None else 'N/A'}</div>
@@ -2553,7 +2552,6 @@ html = f"""<!DOCTYPE html>
       <!-- Leveraged Strategy row -->
       <div class="card" style="background:#0f172a;border-color:#92400e">
         <div class="card-label">Leveraged Strategy</div>
-        <div class="card-value" style="font-size:0.95rem;color:#fbbf24">TQQQ</div>
       </div>
       <div class="card" style="background:#0f172a;border-color:#92400e;text-align:center">
         <div class="card-value">{fmt_pct(lev_ann)}</div>
@@ -2565,7 +2563,7 @@ html = f"""<!DOCTYPE html>
         <div class="card-value">{fmt_pct(lev_mdd)}</div>
       </div>
       <div class="card" style="background:#0f172a;border-color:#92400e;text-align:center">
-        <div class="card-value">{fmt_pct(lev_alpha) if lev_alpha is not None else 'N/A'}</div>
+        <div class="card-value">{f'{lev_alpha:+.2f}' if lev_alpha is not None else 'N/A'}</div>
       </div>
       <div class="card" style="background:#0f172a;border-color:#92400e;text-align:center">
         <div class="card-value" style="color:#fbbf24">{f'{lev_beta:.3f}' if lev_beta is not None else 'N/A'}</div>
