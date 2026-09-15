@@ -38,7 +38,8 @@ FRED_API_KEY  = os.environ.get('FRED_API_KEY', '')
 
 weights           = {'SPY': 0.5, 'QQQ': 0.5}
 start_date        = datetime(2015, 1, 1)
-end_date          = datetime.now() + timedelta(days=2)
+end_date = (datetime.utcnow() + timedelta(days=1)).replace(
+    hour=0, minute=0, second=0, microsecond=0)
 BACKTEST_START    = datetime(2015, 2, 1)
 STARTING_CAPITAL  = 1_000_000.0
 
