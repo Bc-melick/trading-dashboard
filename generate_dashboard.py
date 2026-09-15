@@ -2336,10 +2336,13 @@ html = f"""<!DOCTYPE html>
 
   /* Signal banner */
   .signal-banner {{ background: rgba(10,20,40,0.92); border-bottom: 1px solid #1e3a5f;
-    padding: 20px 32px; display: flex; align-items: stretch; gap: 0; flex-wrap: wrap; }}
+    padding: 20px 32px; display: flex; align-items: stretch; gap: 0;
+    flex-wrap: wrap; justify-content: space-between; }}
   .banner-item {{ display: flex; flex-direction: column; justify-content: flex-start;
-    padding: 0 28px 0 0; margin-right: 28px; border-right: 1px solid #1e3a5f; }}
-  .banner-item:last-child {{ border-right: none; margin-right: 0; padding-right: 0; }}
+    flex: 1; min-width: 120px; padding: 0 20px; border-right: 1px solid #1e3a5f;
+    text-align: center; align-items: center; }}
+  .banner-item:last-child {{ border-right: none; }}
+  .banner-item:first-child {{ padding-left: 0; align-items: flex-start; text-align: left; }}
   .signal-banner .label {{ font-size: 0.9rem; color: #94a3b8; text-transform: uppercase;
     letter-spacing: 0.08em; }}
   .signal-banner .exposure {{ font-size: 1rem; color: #e2e8f0; }}
@@ -2492,13 +2495,6 @@ html = f"""<!DOCTYPE html>
     <div class="label">Ann. Return vs SPY</div>
     <div style="font-size:1.1rem;font-weight:700;margin-top:6px;color:{'#4ade80' if metrics['strat']['ann'] >= metrics['bench']['ann'] else '#f87171'}">{'+' if metrics['strat']['ann'] >= 0 else ''}{metrics['strat']['ann']:.2f}%</div>
     <div style="font-size:0.78rem;color:#64748b;margin-top:4px">SPY: {'+' if metrics['bench']['ann'] >= 0 else ''}{metrics['bench']['ann']:.2f}%</div>
-  </div>
-
-  <!-- Max Drawdown -->
-  <div class="banner-item">
-    <div class="label">Max Drawdown vs SPY</div>
-    <div style="font-size:1.1rem;font-weight:700;margin-top:6px;color:#f87171">{metrics['strat']['mdd']:.2f}%</div>
-    <div style="font-size:0.78rem;color:#64748b;margin-top:4px">SPY: {metrics['bench']['mdd']:.2f}%</div>
   </div>
 
 </div>
