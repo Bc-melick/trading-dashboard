@@ -651,7 +651,6 @@ bench_v = bt_results['Benchmark_Value']
 
 # Calculate for both strategies
 strat_alpha, strat_beta = calc_alpha_beta(strat_v, bench_v)
-lev_alpha,   lev_beta   = calc_alpha_beta(lev_v,   bench_v)
 
 # Trading days approximations
 metrics = {
@@ -1780,6 +1779,7 @@ else:
 
 # ── Leveraged trailing returns ────────────────────────────────────────────────
 lev_v    = lev_results['Portfolio_Value']
+lev_alpha,   lev_beta   = calc_alpha_beta(lev_v,   bench_v)
 strat_alpha, strat_beta = calc_alpha_beta(strat_v, bench_v)
 lev_alpha,   lev_beta   = calc_alpha_beta(lev_v,   bench_v)
 lev_ytd  = ytd_return(lev_v)
