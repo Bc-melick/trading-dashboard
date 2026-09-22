@@ -120,7 +120,7 @@
     "net_margin": -25.4
   },
   "COST": {
-    "rev_growth": 21.5,
+    "rev_growth": 11.6,
     "net_margin": 3.01
   },
   "CRWD": {
@@ -202,10 +202,6 @@
   "KLAC": {
     "rev_growth": 15.2,
     "net_margin": 35.57
-  },
-  "KHC": {
-    "rev_growth": -1.4,
-    "net_margin": -13.64
   },
   "LRCX": {
     "rev_growth": 30.0,
@@ -301,7 +297,7 @@
   },
   "PAYX": {
     "rev_growth": 12.5,
-    "net_margin": 26.63
+    "net_margin": 27.03
   },
   "PYPL": {
     "rev_growth": 4.8,
@@ -407,5 +403,5 @@
     "rev_growth": -5.1,
     "net_margin": 15.28
   },
-  "_cached_on": "2026-09-15T23:14:30.810088"
+  "_cached_on": "2026-09-22T23:19:26.741681"
 }
