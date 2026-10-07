@@ -236,8 +236,8 @@
     "net_margin": 9.34
   },
   "MU": {
-    "rev_growth": 345.7,
-    "net_margin": 55.91
+    "rev_growth": 379.3,
+    "net_margin": 63.8
   },
   "MSFT": {
     "rev_growth": 17.7,
@@ -403,5 +403,5 @@
     "rev_growth": -5.1,
     "net_margin": 15.28
   },
-  "_cached_on": "2026-09-29T23:22:22.650759"
+  "_cached_on": "2026-10-07T00:13:18.606290"
 }
