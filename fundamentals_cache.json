@@ -247,6 +247,10 @@
     "rev_growth": 6.9,
     "net_margin": 0.0
   },
+  "MRNA": {
+    "rev_growth": 2.1,
+    "net_margin": -141.43
+  },
   "MDLZ": {
     "rev_growth": 4.1,
     "net_margin": 8.86
@@ -308,8 +312,8 @@
     "net_margin": 20.43
   },
   "PEP": {
-    "rev_growth": 6.4,
-    "net_margin": 10.79
+    "rev_growth": 5.6,
+    "net_margin": 11.09
   },
   "QCOM": {
     "rev_growth": -4.0,
@@ -387,10 +391,6 @@
     "rev_growth": 5.9,
     "net_margin": 3.0
   },
-  "WBD": {
-    "rev_growth": -11.2,
-    "net_margin": -8.77
-  },
   "WDC": {
     "rev_growth": 43.8,
     "net_margin": 72.95
@@ -403,5 +403,5 @@
     "rev_growth": -5.1,
     "net_margin": 15.28
   },
-  "_cached_on": "2026-10-07T00:13:18.606290"
+  "_cached_on": "2026-10-12T21:22:28.086678"
 }
