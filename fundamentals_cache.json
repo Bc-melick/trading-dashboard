@@ -56,8 +56,8 @@
     "net_margin": 20.25
   },
   "ASML": {
-    "rev_growth": 21.3,
-    "net_margin": 30.11
+    "rev_growth": 55.2,
+    "net_margin": 34.13
   },
   "ALAB": {
     "rev_growth": 104.5,
@@ -152,8 +152,8 @@
     "net_margin": 10.99
   },
   "FAST": {
-    "rev_growth": 14.7,
-    "net_margin": 15.45
+    "rev_growth": 15.5,
+    "net_margin": 15.62
   },
   "FER": {
     "rev_growth": 5.2,
@@ -403,5 +403,5 @@
     "rev_growth": -5.1,
     "net_margin": 15.28
   },
-  "_cached_on": "2026-10-12T21:22:28.086678"
+  "_cached_on": "2026-10-19T23:59:55.951165"
 }
