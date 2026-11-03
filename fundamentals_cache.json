@@ -12,24 +12,24 @@
     "net_margin": 20.45
   },
   "ALNY": {
-    "rev_growth": 66.9,
-    "net_margin": 16.13
+    "rev_growth": 16.7,
+    "net_margin": 52.85
   },
   "GOOGL": {
-    "rev_growth": 24.2,
-    "net_margin": 54.77
+    "rev_growth": 24.7,
+    "net_margin": 50.03
   },
   "GOOG": {
-    "rev_growth": 24.2,
-    "net_margin": 54.77
+    "rev_growth": 24.7,
+    "net_margin": 50.03
   },
   "AMZN": {
-    "rev_growth": 19.6,
-    "net_margin": 17.44
+    "rev_growth": 12.1,
+    "net_margin": 16.9
   },
   "AEP": {
-    "rev_growth": 7.0,
-    "net_margin": 13.78
+    "rev_growth": 13.7,
+    "net_margin": 14.21
   },
   "AMGN": {
     "rev_growth": 9.5,
@@ -68,16 +68,16 @@
     "net_margin": 21.08
   },
   "ADP": {
-    "rev_growth": 6.8,
-    "net_margin": 20.11
+    "rev_growth": 6.1,
+    "net_margin": 20.33
   },
   "AXON": {
     "rev_growth": 35.3,
     "net_margin": 6.19
   },
   "BKR": {
-    "rev_growth": -2.4,
-    "net_margin": 11.17
+    "rev_growth": 14.5,
+    "net_margin": 10.08
   },
   "BKNG": {
     "rev_growth": 8.1,
@@ -88,8 +88,8 @@
     "net_margin": 42.94
   },
   "CDNS": {
-    "rev_growth": 24.2,
-    "net_margin": 23.61
+    "rev_growth": 22.0,
+    "net_margin": 22.51
   },
   "CTAS": {
     "rev_growth": 10.9,
@@ -136,20 +136,20 @@
     "net_margin": 4.48
   },
   "DXCM": {
-    "rev_growth": 13.1,
-    "net_margin": 20.12
+    "rev_growth": 11.2,
+    "net_margin": 19.42
   },
   "FANG": {
     "rev_growth": 52.5,
     "net_margin": 9.03
   },
   "DASH": {
-    "rev_growth": 35.6,
-    "net_margin": 5.29
+    "rev_growth": 34.0,
+    "net_margin": 6.23
   },
   "EXC": {
-    "rev_growth": 9.9,
-    "net_margin": 10.99
+    "rev_growth": 9.2,
+    "net_margin": 10.17
   },
   "FAST": {
     "rev_growth": 15.5,
@@ -160,20 +160,20 @@
     "net_margin": 6.15
   },
   "FTNT": {
-    "rev_growth": 25.6,
-    "net_margin": 28.17
+    "rev_growth": 20.5,
+    "net_margin": 28.96
   },
   "GEHC": {
-    "rev_growth": 5.8,
-    "net_margin": 9.33
+    "rev_growth": 7.2,
+    "net_margin": 9.95
   },
   "GILD": {
-    "rev_growth": 10.2,
-    "net_margin": -10.64
+    "rev_growth": 6.8,
+    "net_margin": -12.46
   },
   "HONA": {
-    "rev_growth": 5.4,
-    "net_margin": 10.86
+    "rev_growth": 2.4,
+    "net_margin": 11.25
   },
   "HON": {
     "rev_growth": 1.3,
@@ -184,8 +184,8 @@
     "net_margin": 25.03
   },
   "INTC": {
-    "rev_growth": 25.4,
-    "net_margin": -19.79
+    "rev_growth": 20.9,
+    "net_margin": -20.09
   },
   "INTU": {
     "rev_growth": 13.7,
@@ -200,16 +200,16 @@
     "net_margin": 7.1
   },
   "KLAC": {
-    "rev_growth": 15.2,
-    "net_margin": 35.57
+    "rev_growth": 28.9,
+    "net_margin": 36.25
   },
   "LRCX": {
     "rev_growth": 54.4,
     "net_margin": 32.34
   },
   "LIN": {
-    "rev_growth": 9.3,
-    "net_margin": 20.43
+    "rev_growth": 9.2,
+    "net_margin": 19.34
   },
   "LITE": {
     "rev_growth": 109.3,
@@ -240,11 +240,11 @@
     "net_margin": 63.8
   },
   "MSFT": {
-    "rev_growth": 17.7,
-    "net_margin": 40.3
+    "rev_growth": 18.8,
+    "net_margin": 41.17
   },
   "MSTR": {
-    "rev_growth": 6.9,
+    "rev_growth": -2.5,
     "net_margin": 0.0
   },
   "MRNA": {
@@ -252,12 +252,12 @@
     "net_margin": -141.43
   },
   "MDLZ": {
-    "rev_growth": 4.1,
-    "net_margin": 8.86
+    "rev_growth": 2.3,
+    "net_margin": 10.22
   },
   "MPWR": {
-    "rev_growth": 47.6,
-    "net_margin": 24.5
+    "rev_growth": 63.1,
+    "net_margin": 23.89
   },
   "MNST": {
     "rev_growth": 20.2,
@@ -276,20 +276,20 @@
     "net_margin": 63.66
   },
   "NXPI": {
-    "rev_growth": 19.5,
-    "net_margin": 22.56
+    "rev_growth": 19.3,
+    "net_margin": 23.39
   },
   "ORLY": {
-    "rev_growth": 8.1,
+    "rev_growth": 8.8,
     "net_margin": 14.27
   },
   "ODFL": {
-    "rev_growth": 10.4,
-    "net_margin": 19.44
+    "rev_growth": 13.1,
+    "net_margin": 20.08
   },
   "PCAR": {
-    "rev_growth": 0.5,
-    "net_margin": 9.0
+    "rev_growth": 19.0,
+    "net_margin": 9.5
   },
   "PLTR": {
     "rev_growth": 92.8,
@@ -304,8 +304,8 @@
     "net_margin": 27.35
   },
   "PYPL": {
-    "rev_growth": 4.8,
-    "net_margin": 14.36
+    "rev_growth": 2.0,
+    "net_margin": 13.78
   },
   "PDD": {
     "rev_growth": 8.1,
@@ -320,8 +320,8 @@
     "net_margin": 21.01
   },
   "REGN": {
-    "rev_growth": 16.7,
-    "net_margin": 27.87
+    "rev_growth": 36.3,
+    "net_margin": 28.51
   },
   "RKLB": {
     "rev_growth": 62.0,
@@ -336,12 +336,12 @@
     "net_margin": 10.85
   },
   "SNDK": {
-    "rev_growth": 371.6,
-    "net_margin": 56.46
+    "rev_growth": 377.9,
+    "net_margin": 67.04
   },
   "STX": {
-    "rev_growth": 48.5,
-    "net_margin": 26.11
+    "rev_growth": 61.0,
+    "net_margin": 31.86
   },
   "SHOP": {
     "rev_growth": 33.7,
@@ -352,24 +352,24 @@
     "net_margin": -8.61
   },
   "SBUX": {
-    "rev_growth": -1.4,
-    "net_margin": 5.17
+    "rev_growth": -4.5,
+    "net_margin": 6.67
   },
   "SNPS": {
     "rev_growth": 42.4,
     "net_margin": 11.43
   },
   "TMUS": {
-    "rev_growth": 7.9,
-    "net_margin": 11.46
+    "rev_growth": 7.4,
+    "net_margin": 12.05
   },
   "TTWO": {
     "rev_growth": 2.0,
     "net_margin": -4.79
   },
   "TER": {
-    "rev_growth": 103.9,
-    "net_margin": 25.77
+    "rev_growth": 69.8,
+    "net_margin": 27.46
   },
   "TSLA": {
     "rev_growth": -0.2,
@@ -400,8 +400,8 @@
     "net_margin": 12.32
   },
   "XEL": {
-    "rev_growth": -5.1,
-    "net_margin": 15.28
+    "rev_growth": 6.6,
+    "net_margin": 17.94
   },
-  "_cached_on": "2026-10-27T00:07:59.882762"
+  "_cached_on": "2026-11-03T02:42:15.506497"
 }
