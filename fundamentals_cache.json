@@ -188,8 +188,8 @@
     "net_margin": -20.09
   },
   "INTU": {
-    "rev_growth": 13.7,
-    "net_margin": 21.29
+    "rev_growth": 12.1,
+    "net_margin": 21.97
   },
   "ISRG": {
     "rev_growth": 21.7,
@@ -272,8 +272,8 @@
     "net_margin": 29.69
   },
   "NVDA": {
-    "rev_growth": 105.9,
-    "net_margin": 63.66
+    "rev_growth": 103.2,
+    "net_margin": 62.53
   },
   "NXPI": {
     "rev_growth": 19.3,
@@ -296,8 +296,8 @@
     "net_margin": 50.34
   },
   "PANW": {
-    "rev_growth": 34.5,
-    "net_margin": 2.67
+    "rev_growth": 39.2,
+    "net_margin": 3.65
   },
   "PAYX": {
     "rev_growth": 5.9,
@@ -308,8 +308,8 @@
     "net_margin": 13.78
   },
   "PDD": {
-    "rev_growth": 8.1,
-    "net_margin": 20.43
+    "rev_growth": 0.1,
+    "net_margin": 20.47
   },
   "PEP": {
     "rev_growth": 5.6,
@@ -332,8 +332,8 @@
     "net_margin": 30.71
   },
   "ROST": {
-    "rev_growth": 13.3,
-    "net_margin": 10.85
+    "rev_growth": 11.7,
+    "net_margin": 10.94
   },
   "SNDK": {
     "rev_growth": 377.9,
@@ -388,8 +388,8 @@
     "net_margin": 30.7
   },
   "WMT": {
-    "rev_growth": 5.9,
-    "net_margin": 3.0
+    "rev_growth": 5.2,
+    "net_margin": 2.8
   },
   "WDC": {
     "rev_growth": 55.5,
@@ -403,5 +403,5 @@
     "rev_growth": 6.6,
     "net_margin": 17.94
   },
-  "_cached_on": "2026-11-17T03:16:03.410197"
+  "_cached_on": "2026-11-24T05:02:15.341455"
 }
